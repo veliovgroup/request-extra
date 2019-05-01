@@ -1,0 +1,1 @@
+See full change-log at [releases on GitHub](https://github.com/VeliovGroup/request-extra/releases)

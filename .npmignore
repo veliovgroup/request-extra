@@ -1,0 +1,6 @@
+.npm
+.github
+.DS_Store
+.eslintcache
+node_modules
+npm-debug.log*
