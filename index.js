@@ -1,39 +1,18 @@
 'use strict';
 
+const { URL }  = require('url');
 const { Curl } = require('node-libcurl');
-const re = {
-  proto: /https?\:\/\//
-};
 
-const defaultOptions  = {
-  retry: true,
-  debug: true,
-  method: 'GET',
-  timeout: 6144,
-  retries: 3,
-  retryDelay: 256,
-  maxRedirects: 4,
-  followRedirect: true,
-  rejectUnauthorized: false,
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36'
-  }
-};
-
-const badCodes = [300, 303, 305, 400, 407, 408, 409, 410, 500, 510];
-const isBadcode = (statusCode) => {
-  return badCodes.includes(statusCode) || statusCode >= 500;
-};
-
-const request = (_opts, cb) => {
-  const opts       = Object.assign({}, defaultOptions, _opts);
+const request = function LibCurlRequest (_opts, cb) {
+  const opts       = Object.assign({}, request.defaultOptions, _opts);
   opts.method      = opts.method.toUpperCase();
   let finished     = false;
   let timeoutTimer = null;
   let retryTimer   = null;
   const curl       = new Curl();
+  const url        = new URL(opts.uri);
 
-  curl.setOpt('URL', opts.uri);
+  curl.setOpt('URL', url.href);
   // Uncomment to show more debug information.
   curl.setOpt(Curl.option.VERBOSE, opts.debug);
 
@@ -48,7 +27,7 @@ const request = (_opts, cb) => {
   curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
   curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
 
-  const customHeaders = [`Host: ${opts.uri.replace(re.proto, '').split('/')[0]}`, 'Accept: */*'];
+  const customHeaders = [`Host: ${url.hostname}`, 'Accept: */*'];
   for (let header in opts.headers) {
     if (opts.headers[header]) {
       customHeaders.push(`${header}: ${opts.headers[header]}`);
@@ -59,7 +38,7 @@ const request = (_opts, cb) => {
     customHeaders.push(`Authorization: Basic ${Buffer.from(opts.auth).toString('base64')}`);
   }
 
-  console.log('opts', opts);
+  opts.debug && console.info('[request-libcurl] REQUEST:', opts, url, customHeaders);
 
   const stopRetryTimeout = () => {
     if (retryTimer) {
@@ -90,7 +69,7 @@ const request = (_opts, cb) => {
       if (finished) { return; }
       curl.close();
 
-      if ((isBadcode(statusCode || 408)) && opts.retry === true && opts.retries > 0) {
+      if ((request.isBadStatus(statusCode || 408, opts.badStatuses)) && opts.retry === true && opts.retries > 0) {
         retry();
       } else {
         finished = true;
@@ -130,7 +109,6 @@ const request = (_opts, cb) => {
     }
 
     curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
-    curl.perform();
 
     timeoutTimer = setTimeout(() => {
       stopRequestTimeout();
@@ -150,12 +128,33 @@ const request = (_opts, cb) => {
         }
       }
     }, opts.timeout + 2500);
+
+    curl.perform();
   });
 
   promise.abort = () => {
     curl.close();
   };
   return promise;
+};
+
+request.defaultOptions  = {
+  retry: true,
+  debug: true,
+  method: 'GET',
+  timeout: 6144,
+  retries: 3,
+  retryDelay: 256,
+  maxRedirects: 4,
+  followRedirect: true,
+  rejectUnauthorized: false,
+  badStatuses: [300, 303, 305, 400, 407, 408, 409, 410, 500, 510],
+  isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
+    return badStatuses.includes(statusCode) || statusCode >= 500;
+  },
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36'
+  }
 };
 
 module.exports = request;

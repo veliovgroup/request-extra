@@ -1,5 +1,9 @@
 # Request-Extra
 
+```shell
+npm install --save request-libcurl
+```
+
 __This is a server-only package.__ This package was created due to lack of stability of Node's `http`/`https` *ClientRequest* modules. Since we've been looking for something tested with decades, and our choice stopped on `libcurl`, later we may change core library, but would keep same API and idea about fast, sustainable and simple HTTP requests.
 
 ## Main features:
@@ -87,6 +91,8 @@ request(opts, (error, resp) => {
 - `opts.timeout` {*Number*} - [Optional] How long to wait for response (*ms*), default: `6144`;
 - `opts.followRedirect` {*Boolean*} - [Optional] Shall request follow redirects? Default: `true`;
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
+- `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 510]`;
+- `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, default: *see at the bottom of examples section*;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `true`.
 
 ### Response:
@@ -130,6 +136,20 @@ request({
 }, (error, resp) => {
   /* ... */
 });
+
+// Override default settings:
+request.defaultOptions.timeout    = 7000;
+request.defaultOptions.retries    = 12;
+request.defaultOptions.retryDelay = 5000;
+request.defaultOptions.followRedirect = false;
+
+// Override bad statuses codes (used to trigger retries)
+request.defaultOptions.badStatuses = [300, 303, 305, 400, 407, 408, 409, 410];
+
+// Override function used to trigger retries based on status code
+request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultOptions.badStatuses) => {
+  return badStatuses.includes(statusCode) || statusCode >= 500;
+};
 ```
 
 ## Running Tests

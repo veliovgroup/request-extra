@@ -1,5 +1,5 @@
 {
-  "name": "request-extra",
+  "name": "request-libcurl",
   "version": "0.0.1",
   "description": "Stable request module built on top of libcurl with repeats, timeouts, and Promise API",
   "main": "index.js",
