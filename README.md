@@ -20,7 +20,7 @@ __This is a server-only package.__ This package was created due to lack of stabi
 
 ```shell
 # ONLY for node@>=8.9.0
-npm install request-extra --save
+npm install request-libcurl --save
 ```
 
 ```js
