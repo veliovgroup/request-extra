@@ -65,11 +65,12 @@ const request = function LibCurlRequest (_opts, cb) {
 
   const promise = new Promise((resolve, reject) => {
     curl.on('end', (statusCode, body, headers) => {
+      opts.debug && console.info('[request-libcurl] REQUEST END:', opts, url.href, statusCode);
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
 
-      if ((request.isBadStatus(statusCode || 408, opts.badStatuses)) && opts.retry === true && opts.retries > 0) {
+      if ((opts.isBadStatus(statusCode || 408, opts.badStatuses)) && opts.retry === true && opts.retries > 0) {
         retry();
       } else {
         finished = true;
@@ -78,11 +79,16 @@ const request = function LibCurlRequest (_opts, cb) {
     });
 
     curl.on('error', (error, errorCode) => {
+      opts.debug && console.error('[request-libcurl] REQUEST ERROR:', opts, {error, errorCode});
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
+      try {
+        error.message = error.toString() || 'Error occurred during request';
+      } catch(e) {
+        error.message = 'Error occurred during request';
+      }
       error.code = errorCode;
-      error.message = 'Error occurred during request';
       error.errorCode = errorCode;
       error.statusCode = 408;
 
