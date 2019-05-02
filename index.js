@@ -7,8 +7,9 @@ const request = function LibCurlRequest (_opts, cb) {
   const opts       = Object.assign({}, request.defaultOptions, _opts);
   opts.method      = opts.method.toUpperCase();
   let finished     = false;
-  let timeoutTimer = null;
   let retryTimer   = null;
+  let timeoutTimer = null;
+  let reject       = () => {};
   const curl       = new Curl();
   const url        = new URL(opts.uri);
 
@@ -27,7 +28,7 @@ const request = function LibCurlRequest (_opts, cb) {
   curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
   curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
 
-  const customHeaders = [`Host: ${url.hostname}`, 'Accept: */*'];
+  const customHeaders = [`Host: ${url.hostname}`];
   for (let header in opts.headers) {
     if (opts.headers[header]) {
       customHeaders.push(`${header}: ${opts.headers[header]}`);
@@ -38,7 +39,7 @@ const request = function LibCurlRequest (_opts, cb) {
     customHeaders.push(`Authorization: Basic ${Buffer.from(opts.auth).toString('base64')}`);
   }
 
-  opts.debug && console.info('[request-libcurl] REQUEST:', opts, url, customHeaders);
+  opts.debug && console.info('[request-libcurl] REQUEST:', url.href, customHeaders);
 
   const stopRetryTimeout = () => {
     if (retryTimer) {
@@ -63,9 +64,10 @@ const request = function LibCurlRequest (_opts, cb) {
     }, opts.retryDelay);
   };
 
-  const promise = new Promise((resolve, reject) => {
+  const promise = new Promise((resolve, _reject) => {
+    reject = _reject;
     curl.on('end', (statusCode, body, headers) => {
-      opts.debug && console.info('[request-libcurl] REQUEST END:', opts, url.href, statusCode);
+      opts.debug && console.info('[request-libcurl] REQUEST END:', url.href, statusCode);
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
@@ -79,7 +81,7 @@ const request = function LibCurlRequest (_opts, cb) {
     });
 
     curl.on('error', (error, errorCode) => {
-      opts.debug && console.error('[request-libcurl] REQUEST ERROR:', opts, {error, errorCode});
+      opts.debug && console.info('[request-libcurl] REQUEST ERROR:', url.href, {error, errorCode});
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
@@ -139,14 +141,22 @@ const request = function LibCurlRequest (_opts, cb) {
   });
 
   promise.abort = () => {
+    finished = true;
     curl.close();
+    const error = {
+      code: 42,
+      message: '499: Client Closed Request',
+      errorCode: 42,
+      statusCode: 499
+    };
+    cb ? cb(error) : reject(error);
   };
   return promise;
 };
 
 request.defaultOptions  = {
   retry: true,
-  debug: true,
+  debug: false,
   method: 'GET',
   timeout: 6144,
   retries: 3,
@@ -159,7 +169,8 @@ request.defaultOptions  = {
     return badStatuses.includes(statusCode) || statusCode >= 500;
   },
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
+    Accept: '*/*'
   }
 };
 
