@@ -1,7 +1,7 @@
 {
   "name": "request-libcurl",
   "version": "0.0.1",
-  "description": "Stable request module built on top of libcurl with repeats, timeouts, and Promise API",
+  "description": "Extremely stable HTTP request module built on top of libcurl with retries, timeouts, Promise and async/await API",
   "main": "index.js",
   "scripts": {
     "test": "mocha"
@@ -20,7 +20,9 @@
     "post",
     "get",
     "API",
-    "rest"
+    "rest",
+    "request-libcurl",
+    "request-extra"
   ],
   "author": "dr.dimitru (https://veliovgroup.com)",
   "engines": {
