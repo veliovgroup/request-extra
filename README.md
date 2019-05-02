@@ -4,7 +4,7 @@
 npm install --save request-libcurl
 ```
 
-__This is a server-only package.__ This package was created due to lack of stability in Node's `http`/`https` *ClientRequest* modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`, later core library might be changed, but would keep same API and idea about fast, sustainable and simple HTTP requests.
+__This is a server-only package.__ This package was created due to a lack of stability in the Node's `http`/`https` *ClientRequest* modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`, later core library might be changed, but we would keep same API and idea about fast, sustainable and simple HTTP requests.
 
 ## Main features:
 
@@ -46,6 +46,7 @@ const opts = {
   auth: 'username:password', // String
   form: '{"ops": "value"}', // String, can be JSON or any other type of payload
   headers: { // Object
+    Accept: '*/*',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36'
   },
 
