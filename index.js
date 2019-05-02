@@ -72,7 +72,7 @@ const request = function LibCurlRequest (_opts, cb) {
       if (finished) { return; }
       curl.close();
 
-      if ((opts.isBadStatus(statusCode || 408, opts.badStatuses)) && opts.retry === true && opts.retries > 0) {
+      if ((opts.isBadStatus(statusCode || 408, opts.badStatuses)) && opts.retry === true && opts.retries > 1) {
         retry();
       } else {
         finished = true;
@@ -81,20 +81,17 @@ const request = function LibCurlRequest (_opts, cb) {
     });
 
     curl.on('error', (error, errorCode) => {
-      opts.debug && console.info('[request-libcurl] REQUEST ERROR:', url.href, {error, errorCode});
+      opts.debug && console.error('[request-libcurl] REQUEST ERROR:', url.href, {error, errorCode});
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
-      try {
-        error.message = error.toString() || 'Error occurred during request';
-      } catch(e) {
-        error.message = 'Error occurred during request';
-      }
+
       error.code = errorCode;
+      error.message = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
       error.errorCode = errorCode;
       error.statusCode = 408;
 
-      if (opts.retry === true && opts.retries > 0) {
+      if (opts.retry === true && opts.retries > 1) {
         retry();
       } else {
         finished = true;
@@ -107,7 +104,14 @@ const request = function LibCurlRequest (_opts, cb) {
         try {
           opts.form = JSON.stringify(opts.form);
         } catch (e) {
-          throw new Error('Can\'t stringify opts.form in POST request ' + e);
+          opts.debug && console.error('[request-libcurl] Can\'t stringify opts.form in POST request :', url.href, e);
+          const error = {
+            code: 43,
+            message: '408: Bad request',
+            errorCode: 43,
+            statusCode: 400
+          };
+          cb ? cb(error) : reject(error);
         }
       }
 
@@ -120,20 +124,19 @@ const request = function LibCurlRequest (_opts, cb) {
 
     timeoutTimer = setTimeout(() => {
       stopRequestTimeout();
-      if (!finished) {
-        curl.close();
-        if (opts.retries > 0) {
-          retry();
-        } else {
-          finished = true;
-          const error = {
-            code: 28,
-            message: '408: host unreachable, request timeout',
-            errorCode: 28,
-            statusCode: 408
-          };
-          cb ? cb(error) : reject(error);
-        }
+      if (finished) { return; }
+      curl.close();
+      if (opts.retries > 0) {
+        retry();
+      } else {
+        finished = true;
+        const error = {
+          code: 28,
+          message: '408: host unreachable, request timeout',
+          errorCode: 28,
+          statusCode: 408
+        };
+        cb ? cb(error) : reject(error);
       }
     }, opts.timeout + 2500);
 
@@ -141,6 +144,7 @@ const request = function LibCurlRequest (_opts, cb) {
   });
 
   promise.abort = () => {
+    if (finished) { return; }
     finished = true;
     curl.close();
     const error = {
