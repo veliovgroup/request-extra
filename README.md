@@ -38,6 +38,8 @@ We build this package to serve our needs and solve our issues with Node's native
 ## API:
 
 ```js
+const request = require('request-extra');
+
 const opts = {
   method: 'GET', // POST, GET
   uri: 'https://example.com', // String
@@ -67,6 +69,12 @@ request(opts).then((resp) => {
   const { errorCode, code, statusCode, message } = error;
 });
 
+// Async/Await
+async function get (opts) {
+  const { statusCode, body, headers } = await request(opts);
+  return body;
+}
+
 // Callback API
 request(opts, (error, resp) => {
   if (error) {
@@ -83,7 +91,7 @@ request(opts, (error, resp) => {
 - `opts.uri` {*String*} - [Required] Fully qualified URI with protocol `http`/`https`;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request;
-- `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
+- `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
 - `opts.debug` {*Boolean*} - [Optional] Enable debug and extra logging, default: `false`;
 - `opts.retry` {*Boolean*} - [Optional] Retry request if connection is broken? Default: `true`;
 - `opts.retries` {*Number*} - [Optional] How many times retry request if connection is broken, default: `3`;
@@ -97,7 +105,7 @@ request(opts, (error, resp) => {
 
 ### Response:
 
-- `error.statusCode` {*String*} - HTTP response/status code;
+- `error.statusCode` {*Number*} - HTTP response/status code;
 - `error.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
 - `error.headers` {*Object*} - HTTP response headers as plain *Object*.
 
@@ -107,6 +115,24 @@ request(opts, (error, resp) => {
 - `error.code` {*Number*} - `libcurl` internal error code, same as `errorCode`;
 - `error.statusCode` {*Number*} - HTTP error code, if any;
 - `error.message` {*String*} - Human-readable error.
+
+### Returns {*Promise*}:
+
+```js
+const request = require('request-extra');
+const promise = request({uri: 'https://example.com'});
+````
+
+- `promise.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
+- `promise.then(resp)` - Callback triggered on successful response
+  - `resp.statusCode` {*Number*} - HTTP status code
+  - `resp.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
+  - `resp.headers` {*Object*} - Key-value plain *Object* with pairs of response headers
+- `promise.catch(error)` - Callback triggered on failed request
+  - `error.errorCode` {*Number*} - `libcurl` internal error code;
+  - `error.code` {*Number*} - `libcurl` internal error code, same as `errorCode`;
+  - `error.statusCode` {*Number*} - HTTP error code, if any;
+  - `error.message` {*String*} - Human-readable error.
 
 ## Examples:
 
