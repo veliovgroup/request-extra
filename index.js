@@ -6,12 +6,17 @@ const { Curl } = require('node-libcurl');
 const request = function LibCurlRequest (_opts, cb) {
   const opts       = Object.assign({}, request.defaultOptions, _opts);
   opts.method      = opts.method.toUpperCase();
+  let sent         = false;
   let finished     = false;
   let retryTimer   = null;
   let timeoutTimer = null;
   let reject       = () => {};
   const curl       = new Curl();
   const url        = new URL(opts.uri);
+
+  if (opts.noStorage || opts.rawBody) {
+    curl.enable(Curl.feature.NO_STORAGE);
+  }
 
   curl.setOpt('URL', url.href);
   // Uncomment to show more debug information.
@@ -140,9 +145,19 @@ const request = function LibCurlRequest (_opts, cb) {
       }
     }, opts.timeout + 2500);
 
-    curl.perform();
+    if (!opts.wait) {
+      if (sent) { return; }
+      sent = true;
+      curl.perform();
+    }
   });
 
+  promise.request = curl;
+  promise.send = () => {
+    if (sent) { return; }
+    sent = true;
+    curl.perform();
+  };
   promise.abort = () => {
     if (finished) { return; }
     finished = true;
@@ -159,11 +174,14 @@ const request = function LibCurlRequest (_opts, cb) {
 };
 
 request.defaultOptions  = {
+  wait: false,
   retry: true,
   debug: false,
   method: 'GET',
   timeout: 6144,
   retries: 3,
+  rawBody: false,
+  noStorage: false,
   retryDelay: 256,
   maxRedirects: 4,
   followRedirect: true,

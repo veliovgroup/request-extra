@@ -88,8 +88,8 @@ request(opts, (error, resp) => {
 
 ### Request options:
 
+- `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
 - `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`. If set to POST, `Content-Type: application/x-www-form-urlencoded` HTTP header would be set;
-- `opts.uri` {*String*} - [Required] Fully qualified URI with protocol `http`/`https`;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request;
 - `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
@@ -102,7 +102,9 @@ request(opts, (error, resp) => {
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
 - `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 510]`;
 - `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, default: *see at the bottom of examples section*;
-- `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `true`.
+- `opts.rawBody` and `opts.noStorage` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
+- `opts.wait` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
+- `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `false`.
 
 ### Response:
 
@@ -125,6 +127,8 @@ const promise = request({uri: 'https://example.com'});
 ````
 
 - `promise.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
+- `promise.send()` - Send request, useful with `wait` and `rawBody`, when you need to delay sending request, for example to set event listeners
+- `promise.request` {*ClientRequest*} - See [`node-libcurl` docs](https://github.com/JCMais/node-libcurl)
 - `promise.then(resp)` - Callback triggered on successful response
   - `resp.statusCode` {*Number*} - HTTP status code
   - `resp.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
