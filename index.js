@@ -19,18 +19,25 @@ const request = function LibCurlRequest (_opts, cb) {
   }
 
   curl.setOpt('URL', url.href);
-  // Uncomment to show more debug information.
   curl.setOpt(Curl.option.VERBOSE, opts.debug);
 
+  if (opts.proxy && typeof opts.proxy === 'string') {
+    curl.setOpt(Curl.option.PROXY, opts.proxy);
+  } else if (opts.proxy === true) {
+    curl.setOpt(Curl.option.PROXY, url.origin);
+  }
+
   curl.setOpt(Curl.option.NOPROGRESS, true);
-  curl.setOpt(Curl.option.TIMEOUT, opts.timeout * 2);
+  curl.setOpt(Curl.option.TIMEOUT_MS, opts.timeout * 2);
   curl.setOpt(Curl.option.MAXREDIRS, opts.maxRedirects);
   curl.setOpt(Curl.option.CUSTOMREQUEST, opts.method);
-  curl.setOpt(Curl.option.CONNECTTIMEOUT, opts.timeout);
   curl.setOpt(Curl.option.FOLLOWLOCATION, opts.followRedirect);
   curl.setOpt(Curl.option.SSL_VERIFYPEER, opts.rejectUnauthorized ? 1 : 0);
   curl.setOpt(Curl.option.SSL_VERIFYHOST, 0);
   curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
+  if (opts.keepAlive === true) {
+    curl.setOpt(Curl.option.TCP_KEEPALIVE, 1);
+  }
   curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
 
   const customHeaders = [`Host: ${url.hostname}`];
@@ -44,7 +51,7 @@ const request = function LibCurlRequest (_opts, cb) {
     customHeaders.push(`Authorization: Basic ${Buffer.from(opts.auth).toString('base64')}`);
   }
 
-  opts.debug && console.info('[request-libcurl] REQUEST:', url.href, customHeaders);
+  opts.debug && console.info('[request-libcurl] REQUEST:', url.href);
 
   const stopRetryTimeout = () => {
     if (retryTimer) {
@@ -103,6 +110,7 @@ const request = function LibCurlRequest (_opts, cb) {
         cb ? cb(error) : reject(error);
       }
     });
+
 
     if (opts.method === 'POST' && opts.form) {
       if (typeof opts.form !== 'string') {
@@ -175,12 +183,14 @@ const request = function LibCurlRequest (_opts, cb) {
 
 request.defaultOptions  = {
   wait: false,
+  proxy: false,
   retry: true,
   debug: false,
   method: 'GET',
   timeout: 6144,
   retries: 3,
   rawBody: false,
+  keepAlive: false,
   noStorage: false,
   retryDelay: 256,
   maxRedirects: 4,

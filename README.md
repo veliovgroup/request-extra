@@ -49,12 +49,12 @@ const opts = {
     Accept: '*/*',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36'
   },
-
   debug: false, // Boolean
   retry: true, // Boolean
   retries: 3, // Number
-  retryDelay: 256, // Number
   timeout: 6144, // Number
+  keepAlive: false, // Boolean
+  retryDelay: 256, // Number
   followRedirect: true, // Boolean
   maxRedirects: 4, // Number
   rejectUnauthorized: false // Boolean
@@ -99,11 +99,13 @@ request(opts, (error, resp) => {
 - `opts.retryDelay` {*Number*} - [Optional] How long to wait between request retries (*ms*), default: `256`;
 - `opts.timeout` {*Number*} - [Optional] How long to wait for response (*ms*), default: `6144`;
 - `opts.followRedirect` {*Boolean*} - [Optional] Shall request follow redirects? Default: `true`;
+- `opts.keepAlive` {*Boolean*} - [Optional] Turn on TCP keepalive probes, default: `false`;
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
 - `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 510]`;
 - `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, default: *see at the bottom of examples section*;
 - `opts.rawBody` and `opts.noStorage` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
 - `opts.wait` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
+- `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `false`.
 
 ### Response:
