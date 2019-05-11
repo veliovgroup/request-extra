@@ -108,6 +108,33 @@ request(opts, (error, resp) => {
 - `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `false`.
 
+
+__Note__: When using `opts.rawBody` or `opts.noStorage` callback/promise won't return `body` and `headers`, to get headers and body use next events:
+
+```js
+let _body     = Buffer.from('');
+let _headers  = Buffer.from('');
+
+const promise = request({
+  uri: 'https://example.com',
+  rawBody: true,
+  wait: true
+}).then((status) => {
+  const body = _body.toString('utf8');
+  const headers = _headers.toString('utf8');
+});
+
+promise.request.on('data', (chunkAsBuffer) => {
+  _body = Buffer.concat([_body, chunkAsBuffer]);
+});
+
+promise.request.on('header', (chunkAsBuffer) => {
+  _headers = Buffer.concat([_headers, chunkAsBuffer]);
+});
+
+promise.send();
+```
+
 ### Response:
 
 - `error.statusCode` {*Number*} - HTTP response/status code;
