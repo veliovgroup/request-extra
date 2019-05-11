@@ -137,9 +137,9 @@ promise.send();
 
 ### Response:
 
-- `error.statusCode` {*Number*} - HTTP response/status code;
-- `error.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
-- `error.headers` {*Object*} - HTTP response headers as plain *Object*.
+- `resp.statusCode` {*Number*} - HTTP response/status code;
+- `resp.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
+- `resp.headers` {*Object*} - HTTP response headers as plain *Object*, all headers names are lower-cased.
 
 ### Error:
 
@@ -148,7 +148,7 @@ promise.send();
 - `error.statusCode` {*Number*} - HTTP error code, if any;
 - `error.message` {*String*} - Human-readable error.
 
-### Returns {*Promise*}:
+### Returns extended {*Promise*} Object:
 
 ```js
 const request = require('request-extra');
