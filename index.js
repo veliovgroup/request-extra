@@ -79,7 +79,7 @@ const request = function LibCurlRequest (_opts, cb) {
 
   const promise = new Promise((resolve, _reject) => {
     reject = _reject;
-    curl.on('end', (statusCode, body, headers) => {
+    curl.on('end', (statusCode, body, _headers) => {
       opts.debug && console.info('[request-libcurl] REQUEST END:', opts.retries, url.href, statusCode);
       stopRequestTimeout();
       if (finished) { return; }
@@ -89,6 +89,13 @@ const request = function LibCurlRequest (_opts, cb) {
         retry();
       } else {
         finished = true;
+        const headers = {};
+        if (_headers && _headers[0]) {
+          delete _headers[0].result;
+          for (let headerName in _headers[0]) {
+            headers[headerName.toLowerCase()] = _headers[0][headerName];
+          }
+        }
         cb ? cb(void 0, {statusCode, body, headers}) : resolve({statusCode, body, headers});
       }
     });
