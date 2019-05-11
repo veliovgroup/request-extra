@@ -69,6 +69,7 @@ const request = function LibCurlRequest (_opts, cb) {
   };
 
   const retry = () => {
+    opts.debug && console.info('[request-libcurl] REQUEST RETRY:', opts.retries, opts.retryDelay, url.href);
     stopRetryTimeout();
     retryTimer = setTimeout(() => {
       --opts.retries;
@@ -79,7 +80,7 @@ const request = function LibCurlRequest (_opts, cb) {
   const promise = new Promise((resolve, _reject) => {
     reject = _reject;
     curl.on('end', (statusCode, body, headers) => {
-      opts.debug && console.info('[request-libcurl] REQUEST END:', url.href, statusCode);
+      opts.debug && console.info('[request-libcurl] REQUEST END:', opts.retries, url.href, statusCode);
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
@@ -93,7 +94,7 @@ const request = function LibCurlRequest (_opts, cb) {
     });
 
     curl.on('error', (error, errorCode) => {
-      opts.debug && console.error('[request-libcurl] REQUEST ERROR:', url.href, {error, errorCode});
+      opts.debug && console.error('[request-libcurl] REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
       stopRequestTimeout();
       if (finished) { return; }
       curl.close();
@@ -110,7 +111,6 @@ const request = function LibCurlRequest (_opts, cb) {
         cb ? cb(error) : reject(error);
       }
     });
-
 
     if (opts.method === 'POST' && opts.form) {
       if (typeof opts.form !== 'string') {
