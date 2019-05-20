@@ -11,7 +11,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 👷‍♂️ Follow `request` API;
 - 📦 The single dependency on `node-libcurl` package;
 - 😎 IDNs support (*internationalized domain names*);
-- 😎 Repeat (*built-in retries*) request of connection was broken;
+- 😎 Repeat (*built-in retries*) request on broken connection;
 - 😎 Send GET/POST with custom `body` and headers;
 - 😎 Follow or deny redirects;
 - 💪 Bulletproof design, during development we plan to avoid complex solutions.
