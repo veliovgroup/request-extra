@@ -1,7 +1,7 @@
 'use strict';
 
 const { URL }  = require('url');
-const { Curl } = require('node-libcurl');
+const { Curl, CurlFeature } = require('node-libcurl');
 
 const request = function LibCurlRequest (_opts, cb) {
   const opts       = Object.assign({}, request.defaultOptions, _opts);
@@ -15,7 +15,7 @@ const request = function LibCurlRequest (_opts, cb) {
   const url        = new URL(opts.uri);
 
   if (opts.noStorage || opts.rawBody) {
-    curl.enable(Curl.feature.NO_STORAGE);
+    curl.enable(CurlFeature.NO_STORAGE);
   }
 
   curl.setOpt('URL', url.href);
