@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Extremely stable HTTP request module built on top of libcurl with retries, timeouts, Promise and async/await API",
   "main": "index.js",
   "scripts": {

@@ -29,10 +29,10 @@ npm install request-libcurl --save
 
 ```js
 // CommonJS
-const request = require('request-extra');
+const request = require('request-libcurl');
 
 //ES6 Style:
-import request from 'request-extra';
+import request from 'request-libcurl';
 ```
 
 ## Note:
@@ -42,7 +42,7 @@ We build this package to serve our needs and solve our issues with Node's native
 ## API:
 
 ```js
-const request = require('request-extra');
+const request = require('request-libcurl');
 
 const opts = {
   method: 'GET', // POST, GET
@@ -154,7 +154,7 @@ promise.send();
 ### Returns extended {*Promise*} Object:
 
 ```js
-const request = require('request-extra');
+const request = require('request-libcurl');
 const promise = request({uri: 'https://example.com'});
 ````
 
@@ -174,7 +174,7 @@ const promise = request({uri: 'https://example.com'});
 ## Examples:
 
 ```js
-const request = require('request-extra');
+const request = require('request-libcurl');
 
 // Simple GET:
 request({ uri: 'https://example.com' }, (error, resp) => {
