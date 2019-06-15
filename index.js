@@ -1,6 +1,6 @@
 'use strict';
 
-const { URL }  = require('url');
+const { URL } = require('url');
 const { Curl, CurlFeature } = require('node-libcurl');
 
 const request = function LibCurlRequest (_opts, cb) {
@@ -93,7 +93,9 @@ const request = function LibCurlRequest (_opts, cb) {
         if (_headers && _headers[0]) {
           delete _headers[0].result;
           for (let headerName in _headers[0]) {
-            headers[headerName.toLowerCase()] = _headers[0][headerName];
+            if (_headers[0][headerName]) {
+              headers[headerName.toLowerCase()] = _headers[0][headerName];
+            }
           }
         }
         cb ? cb(void 0, {statusCode, body, headers}) : resolve({statusCode, body, headers});
