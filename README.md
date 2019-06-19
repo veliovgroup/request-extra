@@ -108,7 +108,7 @@ request(opts, (error, resp) => {
 - `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 510]`;
 - `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, default: *see at the bottom of examples section*;
 - `opts.rawBody` and `opts.noStorage` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
-- `opts.wait` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
+- `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to listen events on `promise.request` object, default: `false`;
 - `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `false`.
 
