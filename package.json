@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Extremely stable HTTP request module built on top of libcurl with retries, timeouts, Promise and async/await API",
   "main": "index.js",
   "scripts": {
@@ -33,11 +33,8 @@
     "url": "https://github.com/VeliovGroup/request-extra/issues"
   },
   "homepage": "https://github.com/VeliovGroup/request-extra#readme",
-  "devDependencies": {
-    "chai": "^4.2.0",
-    "mocha": "^6.1.4"
-  },
+  "devDependencies": {},
   "dependencies": {
-    "node-libcurl": "^2.0.0"
+    "node-libcurl": "^2.0.1"
   }
 }
