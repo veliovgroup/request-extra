@@ -40,7 +40,11 @@ const request = function LibCurlRequest (_opts, cb) {
   }
   curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
 
-  const customHeaders = [`Host: ${url.hostname}`];
+  const customHeaders = [];
+  if (url.hostname) {
+    customHeaders.push(`Host: ${url.hostname}`);
+  }
+
   for (let header in opts.headers) {
     if (opts.headers[header]) {
       customHeaders.push(`${header}: ${opts.headers[header]}`);

@@ -1,11 +1,9 @@
 {
   "name": "request-libcurl",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Extremely stable HTTP request module built on top of libcurl with retries, timeouts, Promise and async/await API",
   "main": "index.js",
-  "scripts": {
-    "test": "mocha"
-  },
+  "scripts": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/VeliovGroup/request-extra.git"
