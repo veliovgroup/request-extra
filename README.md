@@ -37,7 +37,7 @@ import request from 'request-libcurl';
 
 ## Note:
 
-We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or compatible only partially. Use on your own risk or wait for stable `v1.0.0`.
+We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or compatible only partially. Use on your own risk or wait for stable `v1.1.x`.
 
 ## API:
 
