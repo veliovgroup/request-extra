@@ -2,17 +2,48 @@
 
 const { URL } = require('url');
 const { Curl, CurlFeature } = require('node-libcurl');
+const EventEmitter = require('events');
+const badUrlError = {
+  code: 3,
+  status: 400,
+  message: '400: URL Malformed / Invalid URL',
+  errorCode: 3,
+  statusCode: 400
+};
 
-const request = function LibCurlRequest (_opts, cb) {
-  const opts       = Object.assign({}, request.defaultOptions, _opts);
-  opts.method      = opts.method.toUpperCase();
-  let sent         = false;
-  let finished     = false;
-  let retryTimer   = null;
-  let timeoutTimer = null;
-  let reject       = () => {};
+const badRequestError = {
+  code: 43,
+  status: 400,
+  message: '400: Bad request',
+  errorCode: 43,
+  statusCode: 400
+};
+
+const _debug = (...args) => {
+  // if (this.opts.debug) {
+  console.info.call(console, '[DEBUG] [request-libcurl]', ...args);
+  // }
+};
+
+const sendRequest = (libcurl, url, cb) => {
+  _debug('[sendRequest]', url.href);
+
+  if (libcurl.currentCurl && libcurl.currentCurl.close) {
+    libcurl.currentCurl.close.call(libcurl.currentCurl);
+    delete libcurl.currentCurl;
+  }
+
+  const opts       = libcurl.opts;
   const curl       = new Curl();
-  const url        = new URL(opts.uri);
+  let finished     = false;
+  let timeoutTimer = null;
+
+  const stopRequestTimeout = () => {
+    if (timeoutTimer) {
+      clearTimeout(timeoutTimer);
+      timeoutTimer = null;
+    }
+  };
 
   if (opts.noStorage || opts.rawBody) {
     curl.enable(CurlFeature.NO_STORAGE);
@@ -55,150 +86,237 @@ const request = function LibCurlRequest (_opts, cb) {
     customHeaders.push(`Authorization: Basic ${Buffer.from(opts.auth).toString('base64')}`);
   }
 
-  opts.debug && console.info('[request-libcurl] REQUEST:', url.href);
-
-  const stopRetryTimeout = () => {
-    if (retryTimer) {
-      clearTimeout(retryTimer);
-      retryTimer = null;
-    }
-  };
-
-  const stopRequestTimeout = () => {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-      timeoutTimer = null;
-    }
-    stopRetryTimeout();
-  };
-
-  const retry = () => {
-    opts.debug && console.info('[request-libcurl] REQUEST RETRY:', opts.retries, opts.retryDelay, url.href);
-    stopRetryTimeout();
-    retryTimer = setTimeout(() => {
-      --opts.retries;
-      request(opts, cb);
-    }, opts.retryDelay);
-  };
-
-  const promise = new Promise((resolve, _reject) => {
-    reject = _reject;
-    curl.on('end', (statusCode, body, _headers) => {
-      opts.debug && console.info('[request-libcurl] REQUEST END:', opts.retries, url.href, statusCode);
-      stopRequestTimeout();
-      if (finished) { return; }
-      curl.close();
-
-      if ((opts.isBadStatus(statusCode || 408, opts.badStatuses)) && opts.retry === true && opts.retries > 1) {
-        retry();
-      } else {
-        finished = true;
-        const headers = {};
-        if (_headers && _headers[0]) {
-          delete _headers[0].result;
-          for (let headerName in _headers[0]) {
-            if (_headers[0][headerName]) {
-              headers[headerName.toLowerCase()] = _headers[0][headerName];
-            }
-          }
-        }
-        cb ? cb(void 0, {statusCode, body, headers}) : resolve({statusCode, body, headers});
-      }
-    });
-
-    curl.on('error', (error, errorCode) => {
-      opts.debug && console.error('[request-libcurl] REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
-      stopRequestTimeout();
-      if (finished) { return; }
-      curl.close();
-
-      error.code = errorCode;
-      error.message = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
-      error.errorCode = errorCode;
-      error.statusCode = 408;
-
-      if (opts.retry === true && opts.retries > 1) {
-        retry();
-      } else {
-        finished = true;
-        cb ? cb(error) : reject(error);
-      }
-    });
-
-    if (opts.method === 'POST' && opts.form) {
-      if (typeof opts.form !== 'string') {
-        try {
-          opts.form = JSON.stringify(opts.form);
-        } catch (e) {
-          opts.debug && console.error('[request-libcurl] Can\'t stringify opts.form in POST request :', url.href, e);
-          const error = {
-            code: 43,
-            message: '408: Bad request',
-            errorCode: 43,
-            statusCode: 400
-          };
-          cb ? cb(error) : reject(error);
-        }
-      }
-
-      customHeaders.push('Content-Type: application/x-www-form-urlencoded');
-      customHeaders.push(`Content-Length: ${Buffer.byteLength(opts.form)}`);
-      curl.setOpt(Curl.option.POSTFIELDS, opts.form);
-    }
-
-    curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
-
-    timeoutTimer = setTimeout(() => {
-      stopRequestTimeout();
-      if (finished) { return; }
-      curl.close();
-      if (opts.retries > 0) {
-        retry();
-      } else {
-        finished = true;
-        const error = {
-          code: 28,
-          message: '408: host unreachable, request timeout',
-          errorCode: 28,
-          statusCode: 408
-        };
-        cb ? cb(error) : reject(error);
-      }
-    }, opts.timeout + 2500);
-
-    if (!opts.wait) {
-      if (sent) { return; }
-      sent = true;
-      curl.perform();
-    }
-  });
-
-  promise.request = curl;
-  promise.send = () => {
-    if (sent) { return; }
-    sent = true;
-    curl.perform();
-  };
-  promise.abort = () => {
+  curl.on('end', (statusCode, body, _headers) => {
+    _debug('[END EVENT]', opts.retries, url.href, statusCode);
+    stopRequestTimeout();
     if (finished) { return; }
+
     finished = true;
     curl.close();
-    const error = {
-      code: 42,
-      message: '499: Client Closed Request',
-      errorCode: 42,
-      statusCode: 499
-    };
-    cb ? cb(error) : reject(error);
-  };
-  return promise;
+
+    const headers = {};
+    if (_headers && _headers[0]) {
+      delete _headers[0].result;
+      for (let headerName in _headers[0]) {
+        if (_headers[0][headerName]) {
+          headers[headerName.toLowerCase()] = _headers[0][headerName];
+        }
+      }
+    }
+
+    cb(void 0, {statusCode, status: statusCode, body, headers});
+  });
+
+  curl.on('error', (error, errorCode) => {
+    _debug('REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
+    stopRequestTimeout();
+    if (finished) { return; }
+
+    finished = true;
+    curl.close();
+
+    error.code       = errorCode;
+    error.status     = 408;
+    error.message    = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
+    error.errorCode  = errorCode;
+    error.statusCode = 408;
+
+    cb(error);
+  });
+
+  if (opts.method === 'POST' && opts.form) {
+    if (typeof opts.form !== 'string') {
+      try {
+        opts.form = JSON.stringify(opts.form);
+      } catch (e) {
+        _debug('Can\'t stringify opts.form in POST request :', url.href, e);
+        finished = true;
+        process.nextTick(() => {
+          curl.close();
+          cb(badRequestError);
+        });
+        return curl;
+      }
+    }
+
+    customHeaders.push('Content-Type: application/x-www-form-urlencoded');
+    customHeaders.push(`Content-Length: ${Buffer.byteLength(opts.form)}`);
+    curl.setOpt(Curl.option.POSTFIELDS, opts.form);
+  }
+
+  curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
+
+  if (!opts.wait) {
+    process.nextTick(() => {
+      libcurl.send();
+    });
+  }
+
+  return curl;
 };
+
+
+class LibCurlRequest extends Promise {
+  constructor (opts, cb) {
+    _debug('[constructor]', opts.url || opts.uri);
+    Object.assign(this, Object.create(EventEmitter.prototype));
+    this.cb         = cb || (() => {});
+    this.retryTimer = false;
+
+    this.sent     = false;
+    this.finished = false;
+    this.opts     = Object.assign({}, request.defaultOptions, opts);
+    opts.method   = opts.method.toUpperCase();
+    let isBadUrl  = false;
+    let url;
+
+    if (!this.opts.uri && !this.opts.url) {
+      _debug('REQUEST: BAD URL PROVIDED ERROR:', opts);
+      isBadUrl = true;
+    }
+
+    try {
+      this.url = new URL(this.opts.uri || this.opts.url);
+    } catch (urlError) {
+      _debug('REQUEST: `new URL()` ERROR:', opts, urlError);
+      isBadUrl = true;
+    }
+
+    super((resolve, reject) => {
+      this._resolve = resolve;
+      this._reject = reject;
+
+      if (isBadUrl) {
+        process.nextTick(() => {
+          cb(badUrlError);
+          reject(badUrlError);
+        });
+        return;
+      }
+
+      if (!this.opts.wait) {
+        this.currentCurl = sendRequest(this, url, this.sendRequestCallback);
+      }
+    });
+  }
+
+  retry() {
+    if (this.opts.retry === true && this.opts.retries > 0) {
+      --this.opts.retries;
+      this.retryTimer = setTimeout(() => {
+        this.currentCurl = sendRequest(this, this.url, this.sendRequestCallback);
+      }, this.opts.retryDelay);
+      return true;
+    }
+    return false;
+  }
+
+  sendRequestCallback(error, result) {
+    let isRetry    = false;
+    let statusCode = false;
+
+    if (error && error.statusCode) {
+      statusCode = error.statusCode;
+    }
+    if (result && result.statusCode) {
+      statusCode = result.statusCode;
+    }
+
+    if (error) {
+      isRetry = this.retry();
+    } else if ((this.opts.isBadStatus(statusCode || 408, this.opts.badStatuses)) && this.opts.retry === true && this.opts.retries > 1) {
+      isRetry = this.retry();
+    }
+
+    if (!isRetry) {
+      this.finished = true;
+      if (error) {
+        this.cb(error);
+        this._reject(error);
+      } else {
+        this.cb(void 0, result);
+        this._resolve(result);
+      }
+    }
+  }
+
+  then(onFulfilled, onRejected) {
+    return super.then(onFulfilled, onRejected);
+  }
+
+  send() {
+    if (this.sent) { return; }
+    this.sent = true;
+    this.currentCurl.perform.call(this.currentCurl);
+  }
+
+  abort() {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = false;
+    }
+
+    if (!this.finished) {
+      if (this.currentCurl && this.currentCurl.close) {
+        this.currentCurl.close.call(this.currentCurl);
+        delete this.currentCurl;
+      }
+
+      this.finished = true;
+    }
+  }
+}
+
+function request (opts, cb) {
+  return new LibCurlRequest(opts, cb);
+}
+
+
+// const request = function LibCurlRequest (_opts, cb, _promises) {
+
+
+//   _debug('REQUEST:', url.href);
+
+//   if (cb) {
+//     console.log(">>>> HAS CB [cb]");
+//     promises.last.catch((err) => {_debug(">>>>>>>>>> PLAIN PROMISE [CATCH]", err);});
+//     promises.last.then((err) => {_debug(">>>>>>>>>> PLAIN PROMISE [THEN]", err);});
+//   }
+
+//   promises.last.request = curl;
+//   promises.last.send    = _perform;
+//   promises.last.abort   = () => {
+//     if (finished) { return; }
+//     _debug('[request.promise.abort()] URL:', url.href);
+//     try {
+//       curl.close();
+//       finished = true;
+//       const error = {
+//         code: 42,
+//         status: 499,
+//         message: '499: Client Closed Request',
+//         errorCode: 42,
+//         statusCode: 499
+//       };
+
+//       cb(error);
+//       reject(error);
+//     } catch (error) {
+//       // we're good here...
+//       _debug('[request.promise.abort()] ERROR:', url.href, error);
+//     }
+//   };
+
+//   console.log({_promises, promises});
+
+//   return _promises ? promises : Promise.all(promises.values);
+// };
 
 request.defaultOptions  = {
   wait: false,
   proxy: false,
   retry: true,
-  debug: false,
+  debug: true,
   method: 'GET',
   timeout: 6144,
   retries: 3,
