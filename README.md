@@ -12,10 +12,11 @@ __This is a server-only package.__ This package was created due to a lack of sta
 
 ## Main features:
 
-- 👷‍♂️ Follow `request` API;
+- 👨‍💻 100% tests coverage + TDD;
+- 👷‍♂️ Follow `request` API (*simplified*);
 - 📦 The single dependency on `node-libcurl` package;
 - 😎 IDNs support (*internationalized domain names*);
-- 😎 Repeat (*built-in retries*) request on broken connection;
+- 😎 Repeat (*built-in retries*) request on failed or broken connection;
 - 😎 Send GET/POST with custom `body` and headers;
 - 😎 Follow or deny redirects;
 - 💪 Bulletproof design, during development we plan to avoid complex solutions.
@@ -64,27 +65,13 @@ const opts = {
   rejectUnauthorized: false // Boolean
 };
 
-// Promise API v1
-const promise = request(opts);
-
-// Promise API v2
-request(opts).then((resp) => {
-  const { statusCode, body, headers } = resp;
-}).catch((error) => {
-  const { errorCode, code, statusCode, message } = error;
-});
-
-// Async/Await
-async function get (opts) {
-  const { statusCode, body, headers } = await request(opts);
-  return body;
-}
-
 // Callback API
 request(opts, (error, resp) => {
   if (error) {
+    // Houston we got a problem! 😱
     const { errorCode, code, statusCode, message } = error;
   } else {
+    // We've got successful response! 🥳
     const { statusCode, body, headers } = resp;
   }
 });
@@ -93,7 +80,7 @@ request(opts, (error, resp) => {
 ### Request options:
 
 - `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
-- `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`. If set to POST, `Content-Type: application/x-www-form-urlencoded` HTTP header would be set;
+- `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`. If set to POST, by default `Content-Type: application/x-www-form-urlencoded` HTTP header will be set, __unless `Content-Type` header is passed to `opts.headers`__;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request;
 - `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
@@ -118,24 +105,24 @@ __Note__: When using `opts.rawBody` or `opts.noStorage` callback/promise won't r
 let _body     = Buffer.from('');
 let _headers  = Buffer.from('');
 
-const promise = request({
+const req = request({
   uri: 'https://example.com',
   rawBody: true,
   wait: true
-}).then((status) => {
+}, (error, status) => {
   const body = _body.toString('utf8');
   const headers = _headers.toString('utf8');
 });
 
-promise.request.on('data', (chunkAsBuffer) => {
+req.curl.on('data', (chunkAsBuffer) => {
   _body = Buffer.concat([_body, chunkAsBuffer]);
 });
 
-promise.request.on('header', (chunkAsBuffer) => {
+req.curl.on('header', (chunkAsBuffer) => {
   _headers = Buffer.concat([_headers, chunkAsBuffer]);
 });
 
-promise.send();
+req.send();
 ```
 
 ### Response:
@@ -151,21 +138,22 @@ promise.send();
 - `error.statusCode` {*Number*} - HTTP error code, if any;
 - `error.message` {*String*} - Human-readable error.
 
-### Returns extended {*Promise*} Object:
+### Returns `req` *Object*:
 
 ```js
 const request = require('request-libcurl');
-const promise = request({uri: 'https://example.com'});
+const req     = request({uri: 'https://example.com'});
 ````
 
-- `promise.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
-- `promise.send()` - Send request, useful with `wait` and `rawBody`, when you need to delay sending request, for example to set event listeners
-- `promise.request` {*ClientRequest*} - See [`node-libcurl` docs](https://github.com/JCMais/node-libcurl)
-- `promise.then(resp)` - Callback triggered on successful response
-  - `resp.statusCode` {*Number*} - HTTP status code
+- `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
+- `req.send()` - Send request, useful with `wait` and `rawBody`, when you need to delay sending request, for example to set event listeners
+- `req.request` {*ClientRequest*} - See [`node-libcurl` docs](https://github.com/JCMais/node-libcurl)
+- `callback(error, resp)` - Callback triggered on successful response
+  - `error` {*undefined*};
+  - `resp.statusCode` {*Number*} - HTTP status code;
   - `resp.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
-  - `resp.headers` {*Object*} - Key-value plain *Object* with pairs of response headers
-- `promise.catch(error)` - Callback triggered on failed request
+  - `resp.headers` {*Object*} - Key-value plain *Object* with pairs of response headers;
+- `callback(error)` - Callback triggered on failed request
   - `error.errorCode` {*Number*} - `libcurl` internal error code;
   - `error.code` {*Number*} - `libcurl` internal error code, same as `errorCode`;
   - `error.statusCode` {*Number*} - HTTP error code, if any;
@@ -222,7 +210,13 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 3. Then run:
 
 ```shell
-# TBD
+# Install development NPM dependencies:
+npm install --save-dev
+# Install NPM dependencies:
+npm install --save
+# Run tests:
+PORT=3003 npm test
+# PORT env.var is required! And can be changed to any open port!
 ```
 
 ## Support our open source contribution:
