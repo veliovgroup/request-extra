@@ -67,12 +67,16 @@ const sendRequest = (libcurl, url, cb) => {
     libcurl.abort();
   }, opts.timeout + 1000);
 
-  if (opts.noStorage || opts.rawBody) {
-    curl.enable(CurlFeature.NO_STORAGE);
+  if (opts.rawBody) {
+    curl.enable(CurlFeature.Raw);
+  }
+
+  if (opts.noStorage) {
+    curl.enable(CurlFeature.NoStorage);
   }
 
   curl.setOpt('URL', url.href);
-  // curl.setOpt(Curl.option.VERBOSE, opts.debug);
+  curl.setOpt(Curl.option.VERBOSE, opts.debug);
 
   if (opts.proxy && typeof opts.proxy === 'string') {
     curl.setOpt(Curl.option.PROXY, opts.proxy);
@@ -91,6 +95,8 @@ const sendRequest = (libcurl, url, cb) => {
 
   if (opts.keepAlive === true) {
     curl.setOpt(Curl.option.TCP_KEEPALIVE, 1);
+  } else {
+    curl.setOpt(Curl.option.TCP_KEEPALIVE, 0);
   }
 
   const customHeaders = [];
@@ -121,6 +127,14 @@ const sendRequest = (libcurl, url, cb) => {
 
   if (opts.auth) {
     customHeaders.push(`Authorization: Basic ${Buffer.from(opts.auth).toString('base64')}`);
+  }
+
+  if (libcurl.onData) {
+    curl.on('data', libcurl.onData);
+  }
+
+  if (libcurl.onHeader) {
+    curl.on('header', libcurl.onHeader);
   }
 
   curl.on('end', (statusCode, body, _headers) => {
@@ -154,16 +168,23 @@ const sendRequest = (libcurl, url, cb) => {
     finished = true;
     curl.close();
 
+    let statusCode = 408;
+    if (errorCode === 52) {
+      statusCode = 503;
+    } else if (errorCode === 47) {
+      statusCode = 429;
+    }
+
     error.code       = errorCode;
-    error.status     = 408;
+    error.status     = statusCode;
     error.message    = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
     error.errorCode  = errorCode;
-    error.statusCode = 408;
+    error.statusCode = statusCode;
 
     cb(error);
   });
 
-  if (opts.method === 'POST' && opts.form) {
+  if (opts.form) {
     if (typeof opts.form !== 'string') {
       try {
         opts.form = JSON.stringify(opts.form);
@@ -182,9 +203,11 @@ const sendRequest = (libcurl, url, cb) => {
     if (!hasContentType) {
       customHeaders.push('Content-Type: application/x-www-form-urlencoded');
     }
+
     if (!hasContentLength) {
       customHeaders.push(`Content-Length: ${Buffer.byteLength(opts.form)}`);
     }
+
     curl.setOpt(Curl.option.POSTFIELDS, opts.form);
   }
 
@@ -254,6 +277,14 @@ class LibCurlRequest {
     }
   }
 
+  onData(callback) {
+    this.onData = callback;
+  }
+
+  onHeader(callback) {
+    this.onHeader = callback;
+  }
+
   _retry() {
     this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.uri || this.opts.url);
     if (this.opts.retry === true && this.opts.retries > 0) {
@@ -269,18 +300,17 @@ class LibCurlRequest {
   _sendRequestCallback(error, result) {
     this._debug('[_sendRequestCallback]', this.opts.uri || this.opts.url);
     let isRetry    = false;
-    let statusCode = false;
+    let statusCode = 408;
 
-    if (error && error.statusCode) {
-      statusCode = error.statusCode;
-    }
     if (result && result.statusCode) {
       statusCode = result.statusCode;
+    } else if (error && error.statusCode) {
+      statusCode = error.statusCode;
     }
 
-    if (error) {
+    if (error && error.errorCode !== 47) {
       isRetry = this._retry();
-    } else if ((this.opts.isBadStatus(statusCode || 408, this.opts.badStatuses)) && this.opts.retry === true && this.opts.retries > 1) {
+    } else if ((this.opts.isBadStatus(statusCode, this.opts.badStatuses)) && this.opts.retry === true && this.opts.retries > 1) {
       isRetry = this._retry();
     }
 
@@ -333,7 +363,7 @@ request.defaultOptions  = {
   wait: false,
   proxy: false,
   retry: true,
-  debug: true,
+  debug: false,
   method: 'GET',
   timeout: 6144,
   retries: 3,
@@ -344,7 +374,7 @@ request.defaultOptions  = {
   maxRedirects: 4,
   followRedirect: true,
   rejectUnauthorized: false,
-  badStatuses: [300, 303, 305, 400, 407, 408, 409, 410, 500, 510],
+  badStatuses: [300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510],
   isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
     return badStatuses.includes(statusCode) || statusCode >= 500;
   },
