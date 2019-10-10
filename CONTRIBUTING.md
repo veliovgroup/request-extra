@@ -1,11 +1,11 @@
 ### I'm having an issue:
 
 1. Search [issues](https://github.com/VeliovGroup/request-extra/issues), maybe your issue is already solved
-2. Before submitting an issue make sure it's only related to `request-extra` package
+2. Before submitting an issue make sure it's only related to `request-libcurl` package
 3. If your issue is not solved:
 
   - Give an expressive description of what is went wrong
-  - Version of `request-extra` you're experiencing this issue
+  - Version of `request-libcurl` you're experiencing this issue
   - Version of `Node.js`, `NPM` and `MongoDB` you're experiencing this issue
   - If you're getting an error (exception), please provide full error log (output in console) as file or screenshot
 
