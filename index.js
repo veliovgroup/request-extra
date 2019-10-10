@@ -52,6 +52,7 @@ const sendRequest = (libcurl, url, cb) => {
   const curl       = new Curl();
   let finished     = false;
   let timeoutTimer = null;
+  let isJsonUpload = false
   let hasContentType    = false;
   let hasContentLength  = false;
   let hasAcceptEncoding = false;
@@ -185,6 +186,10 @@ const sendRequest = (libcurl, url, cb) => {
   });
 
   if (opts.form) {
+    if (typeof opts.form === 'object') {
+      isJsonUpload = true;
+    }
+
     if (typeof opts.form !== 'string') {
       try {
         opts.form = JSON.stringify(opts.form);
@@ -201,7 +206,11 @@ const sendRequest = (libcurl, url, cb) => {
     }
 
     if (!hasContentType) {
-      customHeaders.push('Content-Type: application/x-www-form-urlencoded');
+      if (isJsonUpload) {
+        customHeaders.push('Content-Type: application/json');
+      } else {
+        customHeaders.push('Content-Type: application/x-www-form-urlencoded');
+      }
     }
 
     if (!hasContentLength) {

@@ -239,10 +239,7 @@ describe('LibCurlRequest', function () {
       request({
         method: 'POST',
         url: 'http://httpbin.org/post',
-        form: httpbinPostForm,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        form: httpbinPostForm
       }, (error, resp) => {
         assert.isOk(true, 'got response');
         assert.isUndefined(error, 'no error presented');
@@ -264,10 +261,7 @@ describe('LibCurlRequest', function () {
       request({
         method: 'POST',
         url: 'https://httpbin.org/post',
-        form: httpbinPostForm,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        form: httpbinPostForm
       }, (error, resp) => {
         assert.isOk(true, 'got response');
         assert.isUndefined(error, 'no error presented');
@@ -383,9 +377,6 @@ describe('LibCurlRequest', function () {
         method: 'PUT',
         url: 'http://httpbin.org/put',
         form: httpbinPutForm,
-        headers: {
-          'Content-Type': 'application/json'
-        }
       }, (error, resp) => {
         assert.isOk(true, 'got response');
         assert.isUndefined(error, 'no error presented');
@@ -408,9 +399,6 @@ describe('LibCurlRequest', function () {
         method: 'PUT',
         url: 'https://httpbin.org/put',
         form: httpbinPutForm,
-        headers: {
-          'Content-Type': 'application/json'
-        }
       }, (error, resp) => {
         assert.isOk(true, 'got response');
         assert.isUndefined(error, 'no error presented');
