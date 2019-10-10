@@ -11,10 +11,10 @@ const PORT = parseInt(process.env.PORT || 3003);
 const TEST_URL = `http://127.0.0.1:${PORT}`;
 
 const server = http.createServer(function (req, res) {
-  let data = '';
+  let data = Buffer.from('');
 
-  req.on('data', (a) => {
-    data += a.toString('utf8');
+  req.on('data', (chunkAsBuffer) => {
+    data = Buffer.concat([data, chunkAsBuffer]);
   });
 
   req.on('end', () => {
@@ -60,9 +60,12 @@ const server = http.createServer(function (req, res) {
         res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
         const obj = {
           headers: req.headers,
-          data
+          data: data.toString('utf8')
         };
         res.end(JSON.stringify(obj));
+      } else if (req.url.endsWith('upload')) {
+        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
+        res.end(JSON.stringify({messageLength: data.length}));
       } else {
         res.writeHead(204);
         res.end();
@@ -760,6 +763,60 @@ describe('LibCurlRequest', function () {
         assert.equal(body.data, form, 'Form received and returned correctly');
         assert.equal(body.headers['content-type'], 'application/x-www-form-urlencoded', 'Default POST content-type header');
         done();
+      });
+    });
+  });
+
+  describe('UPLOAD', () => {
+    it('UPLOAD/POST/IMG', (done) => {
+      const fileLocation = path.resolve('.') + '/test/bb.jpg';
+      const origFile = fs.readFileSync(fileLocation);
+      fs.open(fileLocation, 'r', function(err, fd) {
+        if (err) {
+          assert.isOk(false, `Can't open the file: ${fileLocation}`);
+          return;
+        }
+
+        request({
+          method: 'POST',
+          url: TEST_URL + '/upload',
+          upload: fd
+        }, (error, resp) => {
+          assert.isOk(true, 'got response');
+          assert.isUndefined(error, 'no error presented');
+          assert.equal(resp.statusCode, 200, 'statusCode: 200');
+          assert.equal(resp.status, 200, 'status: 200');
+          const body = JSON.parse(resp.body);
+          assert.isObject(body, 'Response body is parsed to Object');
+          assert.equal(body.messageLength, origFile.byteLength, 'Form received and returned correctly');
+          done();
+        });
+      });
+    });
+
+    it('UPLOAD/POST/PDF', (done) => {
+      const fileLocation = path.resolve('.') + '/test/rfc2616.pdf';
+      const origFile = fs.readFileSync(fileLocation);
+      fs.open(fileLocation, 'r', function(err, fd) {
+        if (err) {
+          assert.isOk(false, `Can't open the file: ${fileLocation}`);
+          return;
+        }
+
+        request({
+          method: 'POST',
+          url: TEST_URL + '/upload',
+          upload: fd
+        }, (error, resp) => {
+          assert.isOk(true, 'got response');
+          assert.isUndefined(error, 'no error presented');
+          assert.equal(resp.statusCode, 200, 'statusCode: 200');
+          assert.equal(resp.status, 200, 'status: 200');
+          const body = JSON.parse(resp.body);
+          assert.isObject(body, 'Response body is parsed to Object');
+          assert.equal(body.messageLength, origFile.byteLength, 'Form received and returned correctly');
+          done();
+        });
       });
     });
   });
