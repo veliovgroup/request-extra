@@ -52,7 +52,7 @@ const sendRequest = (libcurl, url, cb) => {
   const curl       = new Curl();
   let finished     = false;
   let timeoutTimer = null;
-  let isJsonUpload = false
+  let isJsonUpload = false;
   let hasContentType    = false;
   let hasContentLength  = false;
   let hasAcceptEncoding = false;
