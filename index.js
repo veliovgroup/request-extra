@@ -220,6 +220,9 @@ const sendRequest = (libcurl, url, cb) => {
     }
 
     curl.setOpt(Curl.option.POSTFIELDS, opts.form);
+  } else if (opts.upload) {
+    curl.setOpt(Curl.option.UPLOAD, true);
+    curl.setOpt(Curl.option.READDATA, opts.upload);
   }
 
   curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
