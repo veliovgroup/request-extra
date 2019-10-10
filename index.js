@@ -225,6 +225,26 @@ const sendRequest = (libcurl, url, cb) => {
     curl.setOpt(Curl.option.READDATA, opts.upload);
   }
 
+  if (opts.curlOptions && typeof opts.curlOptions === 'object') {
+    for (let option in opts.curlOptions) {
+      if (Curl.option[option] !== undefined) {
+        curl.setOpt(Curl.option[option], opts.curlOptions[option]);
+      }
+    }
+  }
+
+  if (opts.curlFeatures && typeof opts.curlFeatures === 'object') {
+    for (let option in opts.curlFeatures) {
+      if (CurlFeature[option] !== undefined) {
+        if (opts.curlFeatures[option] === true) {
+          curl.enable(CurlFeature[option]);
+        } else if (opts.curlFeatures[option] === false) {
+          curl.disable(CurlFeature[option]);
+        }
+      }
+    }
+  }
+
   curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
 
   process.nextTick(() => {
