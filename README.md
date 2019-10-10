@@ -1,4 +1,4 @@
-# Request-Extra
+# Request-libcurl
 
 <a href="https://www.patreon.com/bePatron?u=20396046">
   <img src="https://c5.patreon.com/external/logo/become_a_patron_button@2x.png" width="160">
@@ -12,7 +12,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 
 ## Main features:
 
-- 👨‍💻 100% tests coverage + TDD;
+- 👨‍💻 98% tests coverage + TDD;
 - 👷‍♂️ Follow `request` API (*simplified*);
 - 📦 The single dependency on `node-libcurl` package;
 - 😎 IDNs support (*internationalized domain names*);
@@ -47,7 +47,7 @@ const request = require('request-libcurl');
 
 const opts = {
   method: 'GET', // POST, GET
-  uri: 'https://example.com', // String
+  url: 'https://example.com', // String
   auth: 'username:password', // String
   form: '{"ops": "value"}', // String, can be JSON or any other type of payload
   headers: { // Object
@@ -77,9 +77,55 @@ request(opts, (error, resp) => {
 });
 ```
 
+### Request default options:
+
+```js
+const request = require('request-libcurl');
+
+// Default "defaultOptions" Object:
+request.defaultOptions = {
+  wait: false,
+  proxy: false,
+  retry: true,
+  debug: false,
+  method: 'GET',
+  timeout: 6144,
+  retries: 3,
+  rawBody: false,
+  keepAlive: false,
+  noStorage: false,
+  retryDelay: 256,
+  maxRedirects: 4,
+  followRedirect: true,
+  rejectUnauthorized: false,
+  badStatuses: [ 300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510 ],
+  isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
+    return badStatuses.includes(statusCode) || statusCode >= 500;
+  },
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
+    Accept: '*/*'
+  }
+};
+
+// Override default settings:
+request.defaultOptions.timeout = 7000;
+request.defaultOptions.retries = 12;
+request.defaultOptions.retryDelay = 5000;
+request.defaultOptions.followRedirect = false;
+
+// Override bad statuses codes (used to trigger retries)
+request.defaultOptions.badStatuses = [300, 303, 305, 400, 407, 408, 409, 410];
+
+// Override function used to trigger retries based on status code
+request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultOptions.badStatuses) => {
+  return badStatuses.includes(statusCode) || statusCode >= 500;
+};
+```
+
 ### Request options:
 
-- `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
+- `opts.url` or `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
 - `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`. If set to POST, by default `Content-Type: application/x-www-form-urlencoded` HTTP header will be set, __unless `Content-Type` header is passed to `opts.headers`__;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request;
@@ -92,34 +138,46 @@ request(opts, (error, resp) => {
 - `opts.followRedirect` {*Boolean*} - [Optional] Shall request follow redirects? Default: `true`;
 - `opts.keepAlive` {*Boolean*} - [Optional] Turn on TCP keepalive probes, default: `false`;
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
-- `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 510]`;
+- `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510]`;
 - `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, default: *see at the bottom of examples section*;
-- `opts.rawBody` and `opts.noStorage` {*Boolean*} - Disable all data processing, great option for *piping*, default: `false`;
-- `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to listen events on `promise.request` object, default: `false`;
+- `opts.rawBody` {*Boolean*} - Disable all data processing (`body` will be passed as *Buffer*, `headers` will be empty, use `.onHeaders()` hook to get headers with `rawBody` option), great option for *piping*, default: `false`;
+- `opts.noStorage` {*Boolean*} - Disable all data processing and data concatenation (`headers` and `body` won't be passed to response), great option for *piping*, default: `false`;
+- `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeaders()` and `.onBody()` hooks, default: `false`;
 - `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request continue if SSL/TLS certificate can't be validated? Default: `false`.
 
-__Note__: When using `opts.rawBody` or `opts.noStorage` callback/promise won't return `body` and `headers`, to get headers and body use next events:
+__Note__: When using `opts.rawBody` or `opts.noStorage` callback won't return `headers` and `body`, to get headers and body use `onData` and `onHeaders` hooks:
 
 ```js
-let _body     = Buffer.from('');
-let _headers  = Buffer.from('');
+let _body    = Buffer.from('');
+let _headers = Buffer.from('');
+const headersObj = {};
 
 const req = request({
-  uri: 'https://example.com',
+  url: 'https://example.com',
+  retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` hooks
   rawBody: true,
-  wait: true
-}, (error, status) => {
+  wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` hooks
+}, (error, resp) => {
   const body = _body.toString('utf8');
   const headers = _headers.toString('utf8');
 });
 
-req.curl.on('data', (chunkAsBuffer) => {
+req.onData((chunkAsBuffer) => {
+  // Do something with a body
+  // .pipe() for example
   _body = Buffer.concat([_body, chunkAsBuffer]);
 });
 
-req.curl.on('header', (chunkAsBuffer) => {
+req.onHeader((chunkAsBuffer) => {
   _headers = Buffer.concat([_headers, chunkAsBuffer]);
+
+  // or convert it to headers Object:
+  const header = chunkAsBuffer.toString('utf8');
+  if (header.includes(':')) {
+    const splitHeader = header.split(':');
+    headersObj[splitHeader[0].toLowerCase().trim()] = splitHeader[1].trim();
+  }
 });
 
 req.send();
@@ -142,12 +200,13 @@ req.send();
 
 ```js
 const request = require('request-libcurl');
-const req     = request({uri: 'https://example.com'});
+const req     = request({url: 'https://example.com'});
 ````
 
 - `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
-- `req.send()` - Send request, useful with `wait` and `rawBody`, when you need to delay sending request, for example to set event listeners
-- `req.request` {*ClientRequest*} - See [`node-libcurl` docs](https://github.com/JCMais/node-libcurl)
+- `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or hooks
+- `req.onData(callback)` - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and hooks/events
+- `req.onHeader(callback)` - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and hooks/events
 - `callback(error, resp)` - Callback triggered on successful response
   - `error` {*undefined*};
   - `resp.statusCode` {*Number*} - HTTP status code;
@@ -165,14 +224,14 @@ const req     = request({uri: 'https://example.com'});
 const request = require('request-libcurl');
 
 // Simple GET:
-request({ uri: 'https://example.com' }, (error, resp) => {
+request({ url: 'https://example.com' }, (error, resp) => {
   /* ... */
 });
 
 // Simple POST:
 request({
   method: 'POST',
-  uri: 'https://example.com',
+  url: 'https://example.com',
   form: JSON.stringify({ myForm: 'data' })
 }, (error, resp) => {
   /* ... */
@@ -181,26 +240,12 @@ request({
 // POST request with Authorization:
 request({
   method: 'POST',
-  uri: 'https://example.com',
+  url: 'https://example.com',
   auth: 'username:passwd',
   form: JSON.stringify({ myForm: 'data' })
 }, (error, resp) => {
   /* ... */
 });
-
-// Override default settings:
-request.defaultOptions.timeout    = 7000;
-request.defaultOptions.retries    = 12;
-request.defaultOptions.retryDelay = 5000;
-request.defaultOptions.followRedirect = false;
-
-// Override bad statuses codes (used to trigger retries)
-request.defaultOptions.badStatuses = [300, 303, 305, 400, 407, 408, 409, 410];
-
-// Override function used to trigger retries based on status code
-request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultOptions.badStatuses) => {
-  return badStatuses.includes(statusCode) || statusCode >= 500;
-};
 ```
 
 ## Running Tests
