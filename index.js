@@ -91,7 +91,9 @@ const sendRequest = (libcurl, url, cb) => {
   curl.setOpt(Curl.option.CUSTOMREQUEST, opts.method);
   curl.setOpt(Curl.option.FOLLOWLOCATION, opts.followRedirect);
   curl.setOpt(Curl.option.SSL_VERIFYPEER, opts.rejectUnauthorized ? 1 : 0);
-  curl.setOpt(Curl.option.SSL_VERIFYHOST, 0);
+  curl.setOpt(Curl.option.PROXY_SSL_VERIFYPEER, opts.rejectUnauthorizedProxy ? 1 : 0);
+  curl.setOpt(Curl.option.SSL_VERIFYHOST, opts.rejectUnauthorized ? 2 : 0);
+  curl.setOpt(Curl.option.PROXY_SSL_VERIFYHOST, opts.rejectUnauthorizedProxy ? 2 : 0);
   curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
 
   if (opts.keepAlive === true) {
@@ -383,6 +385,7 @@ request.defaultOptions  = {
   maxRedirects: 4,
   followRedirect: true,
   rejectUnauthorized: false,
+  rejectUnauthorizedProxy: false,
   badStatuses: [300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510],
   isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
     return badStatuses.includes(statusCode) || statusCode >= 500;
