@@ -128,7 +128,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.url` or `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
 - `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`. If set to POST, by default `Content-Type: application/x-www-form-urlencoded` HTTP header will be set, __unless `Content-Type` header is passed to `opts.headers`__;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
-- `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request;
+- `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request. If *String* is passed `Content-Type` will be set to `application/x-www-form-urlencoded`, by passing plain *Object* `Content-Type` will be set to `application/json`. To set custom `Content-Type` — pass it to `opts.headers` *Object*;
 - `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
 - `opts.debug` {*Boolean*} - [Optional] Enable debug and extra logging, default: `false`;
 - `opts.retry` {*Boolean*} - [Optional] Retry request if connection is broken? Default: `true`;
@@ -222,27 +222,64 @@ const req     = request({url: 'https://example.com'});
 
 ```js
 const request = require('request-libcurl');
+const querystring = require('querystring');
 
-// Simple GET:
+// GET request:
 request({ url: 'https://example.com' }, (error, resp) => {
   /* ... */
 });
 
-// Simple POST:
+// POST (Content-Type: application/x-www-form-urlencoded):
+// by passing an String or QueryString Object to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
-  form: JSON.stringify({ myForm: 'data' })
+  form: querystring.stringify({ myForm: 'data' })
 }, (error, resp) => {
   /* ... */
 });
 
-// POST request with Authorization:
+// POST with Authorization (Content-Type: application/x-www-form-urlencoded):
+// by passing an String or QueryString Object to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
   auth: 'username:passwd',
-  form: JSON.stringify({ myForm: 'data' })
+  form: querystring.stringify({ myForm: 'data' })
+}, (error, resp) => {
+  /* ... */
+});
+
+// POST (Content-Type: application/json):
+// by passing an plain Object to `form`
+request({
+  method: 'POST',
+  url: 'https://example.com',
+  form: { myForm: 'data' }
+}, (error, resp) => {
+  /* ... */
+});
+
+// POST with Authorization (Content-Type: application/json):
+// by passing an plain Object to `form`
+request({
+  method: 'POST',
+  url: 'https://example.com',
+  auth: 'username:passwd',
+  form: { myForm: 'data' }
+}, (error, resp) => {
+  /* ... */
+});
+
+// Custom POST (Content-Type: text/plain):
+// by passing an plain Object to `form`
+request({
+  method: 'POST',
+  url: 'https://example.com',
+  form: 'Plain String or Base64 String',
+  headers: {
+    'Content-Type': 'text/plain'
+  }
 }, (error, resp) => {
   /* ... */
 });
