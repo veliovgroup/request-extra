@@ -126,9 +126,10 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 ### Request options:
 
 - `opts.url` or `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
-- `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`. If set to POST, by default `Content-Type: application/x-www-form-urlencoded` HTTP header will be set, __unless `Content-Type` header is passed to `opts.headers`__;
+- `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request. If *String* is passed `Content-Type` will be set to `application/x-www-form-urlencoded`, by passing plain *Object* `Content-Type` will be set to `application/json`. To set custom `Content-Type` — pass it to `opts.headers` *Object*;
+- `opts.upload` {*Integer*} - [Optional] To upload a file pass an *Integer* representing the *file descriptor*. When uploading a file
 - `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
 - `opts.debug` {*Boolean*} - [Optional] Enable debug and extra logging, default: `false`;
 - `opts.retry` {*Boolean*} - [Optional] Retry request if connection is broken? Default: `true`;
@@ -144,10 +145,15 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.noStorage` {*Boolean*} - Disable all data processing and data concatenation (`headers` and `body` won't be passed to response), great option for *piping*, default: `false`;
 - `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeaders()` and `.onBody()` hooks, default: `false`;
 - `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
-- `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate can't be validated? Default: `false`.
+- `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate can't be validated? Default: `false`;
 - `opts.rejectUnauthorizedProxy` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate of a __proxy host__ can't be validated? Default: `false`.
 
-__Note__: When using `opts.rawBody` or `opts.noStorage` callback won't return `headers` and `body`, to get headers and body use `onData` and `onHeaders` hooks:
+__Notes__:
+
+- When using `opts.rawBody` callback won't return `headers`, to get headers use `onHeaders` hook;
+- When using `opts.noStorage` callback won't return `headers` and `body`, to get headers and body use `onData` and `onHeaders` hooks;
+- `opts.upload` and `opts.form` __can not be used together__, there won't be exception thrown, if both presented — `opts.form` will be used;
+- When using `opts.upload` or __any other request where server returns__ `expect: '100-continue'` HTTP header — callback won't return `headers`, to get headers use `onHeaders` hook.
 
 ```js
 let _body    = Buffer.from('');
@@ -159,7 +165,10 @@ const req = request({
   retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` hooks
   rawBody: true,
   wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` hooks
-}, (error, resp) => {
+}, (error) => {
+  if (error) {
+    throw error;
+  }
   const body = _body.toString('utf8');
   const headers = _headers.toString('utf8');
 });
@@ -221,17 +230,25 @@ const req     = request({url: 'https://example.com'});
 
 ## Examples:
 
+### GET request
+
 ```js
 const request = require('request-libcurl');
-const querystring = require('querystring');
 
 // GET request:
 request({ url: 'https://example.com' }, (error, resp) => {
   /* ... */
 });
+```
+
+### POST request
+
+```js
+const request = require('request-libcurl');
+const querystring = require('querystring');
 
 // POST (Content-Type: application/x-www-form-urlencoded):
-// by passing an String or QueryString Object to `form`
+// by passing a String or QueryString Object to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
@@ -241,7 +258,7 @@ request({
 });
 
 // POST with Authorization (Content-Type: application/x-www-form-urlencoded):
-// by passing an String or QueryString Object to `form`
+// by passing a String or QueryString Object to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
@@ -260,6 +277,12 @@ request({
 }, (error, resp) => {
   /* ... */
 });
+```
+
+### POST request with extra options
+
+```js
+const request = require('request-libcurl');
 
 // POST with Authorization (Content-Type: application/json):
 // by passing an plain Object to `form`
@@ -277,12 +300,39 @@ request({
 request({
   method: 'POST',
   url: 'https://example.com',
-  form: 'Plain String or Base64 String',
+  form: 'Plain String or Base64 String or any other String',
   headers: {
     'Content-Type': 'text/plain'
   }
 }, (error, resp) => {
   /* ... */
+});
+```
+
+### File upload:
+
+```js
+const fs = require('fs');
+const request = require('request-libcurl');
+
+
+fs.open('/path/to/a/file', 'r', function(err, fd) {
+  if (err) {
+    throw new Error('can not read the file');
+  }
+
+  request({
+    method: 'POST',
+    url: '/upload',
+    upload: fd,
+    retry: false,
+  }, (error, resp) => {
+    if (error) {
+      throw error;
+    } else {
+      // File successfully uploaded
+    }
+  });
 });
 ```
 
@@ -300,6 +350,7 @@ npm install --save
 # Run tests:
 PORT=3003 npm test
 # PORT env.var is required! And can be changed to any open port!
+# Note: The Internet connection is required to perform tests
 ```
 
 ## Support our open source contribution:
