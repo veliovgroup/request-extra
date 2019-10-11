@@ -10,9 +10,9 @@ npm install --save request-libcurl
 
 __This is a server-only package.__ This package was created due to a lack of stability in the Node's `http`/`https` *ClientRequest* modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`, later core library might be changed, but we would keep same API and idea about fast, sustainable and simple HTTP requests.
 
-## Main features:
+## Main features
 
-- 👨‍💻 98% tests coverage + TDD;
+- 👨‍💻 98% tests coverage + TDD (*only for http(s)*);
 - 👷‍♂️ Follow `request` API (*simplified*);
 - 📦 The single dependency on `node-libcurl` package;
 - 😎 IDNs support (*internationalized domain names*);
@@ -21,7 +21,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 😎 Follow or deny redirects;
 - 💪 Bulletproof design, during development we plan to avoid complex solutions.
 
-## Install:
+## Install
 
 ```shell
 # ONLY for node@>=8.9.0
@@ -36,11 +36,11 @@ const request = require('request-libcurl');
 import request from 'request-libcurl';
 ```
 
-## Note:
+## Note
 
 We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or compatible only partially. Use on your own risk or wait for stable `v1.1.x`.
 
-## API:
+## API
 
 ```js
 const request = require('request-libcurl');
@@ -77,7 +77,7 @@ request(opts, (error, resp) => {
 });
 ```
 
-### Request default options:
+### Request default options
 
 ```js
 const request = require('request-libcurl');
@@ -123,7 +123,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 };
 ```
 
-### Request options:
+### Request options
 
 - `opts.url` or `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
 - `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`;
@@ -146,14 +146,17 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeaders()` and `.onBody()` hooks, default: `false`;
 - `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate can't be validated? Default: `false`;
-- `opts.rejectUnauthorizedProxy` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate of a __proxy host__ can't be validated? Default: `false`.
+- `opts.rejectUnauthorizedProxy` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate of a __proxy host__ can't be validated? Default: `false`;
+- `opts.curlOptions` {*Object*} - [Optional] Explicitly set `libcurl` options, full list of options available [here](https://curl.haxx.se/libcurl/c/curl_easy_setopt.html) and [here](https://github.com/JCMais/node-libcurl/blob/32647acc28b026bbd03aa1e3abea9cbbc8f7d43b/lib/generated/CurlOption.ts#L3286);
+- `opts.curlFeatures` {*Object*} - [Optional] Explicitly __enable__ or __disable__ `libcurl` features. To __enable__ a feature pass `true` as a value, example: `{NoDataParsing: true}`. To __disable__ pass `false` as a value, example: `{NoDataParsing: false}`. Full list of available features available [here](https://github.com/JCMais/node-libcurl/blob/249323f0f3883f8cbf6d0e91a89bfecb5862da53/lib/enum/CurlFeature.ts#L7).
 
 __Notes__:
 
 - When using `opts.rawBody` callback won't return `headers`, to get headers use `onHeaders` hook;
 - When using `opts.noStorage` callback won't return `headers` and `body`, to get headers and body use `onData` and `onHeaders` hooks;
 - `opts.upload` and `opts.form` __can not be used together__, there won't be exception thrown, if both presented — `opts.form` will be used;
-- When using `opts.upload` or __any other request where server returns__ `expect: '100-continue'` HTTP header — callback won't return `headers`, to get headers use `onHeaders` hook.
+- When using `opts.upload` or __any other request where server returns__ `expect: '100-continue'` HTTP header — callback won't return `headers`, to get headers use `onHeaders` hook;
+- This package is build on top of [`libcurl`](https://curl.haxx.se/libcurl/) and [`node-libcurl`](https://github.com/JCMais/node-libcurl) it's the way much more powerful than just sending requests via `http` and `https` protocol. Libcurl can work with IMAP/SMTP protocols getting/sending emails. Libcurl can serve as fully-featured FTP-client. Here's full list of supported protocols: `DICT`, `FILE`, `FTP`, `FTPS`, `Gopher`, `HTTP`, `HTTPS`, `IMAP`, `IMAPS`, `LDAP`, `LDAPS`, `POP3`, `POP3S`, `RTMP`, `RTSP`, `SCP`, `SFTP`, `SMTP`, `SMTPS`, `Telnet` and `TFTP`. To learn more on how to utilize all available power and features see docs of [`node-libcurl`](https://github.com/JCMais/node-libcurl#node-libcurl) and [`libcurl`](https://curl.haxx.se/libcurl/) itself.
 
 ```js
 let _body    = Buffer.from('');
@@ -193,20 +196,20 @@ req.onHeader((chunkAsBuffer) => {
 req.send();
 ```
 
-### Response:
+### Response
 
 - `resp.statusCode` {*Number*} - HTTP response/status code;
 - `resp.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
 - `resp.headers` {*Object*} - HTTP response headers as plain *Object*, all headers names are lower-cased.
 
-### Error:
+### Error
 
 - `error.errorCode` {*Number*} - `libcurl` internal error code;
 - `error.code` {*Number*} - `libcurl` internal error code, same as `errorCode`;
 - `error.statusCode` {*Number*} - HTTP error code, if any;
 - `error.message` {*String*} - Human-readable error.
 
-### Returns `req` *Object*:
+### Returns `req` *Object*
 
 ```js
 const request = require('request-libcurl');
@@ -228,7 +231,7 @@ const req     = request({url: 'https://example.com'});
   - `error.statusCode` {*Number*} - HTTP error code, if any;
   - `error.message` {*String*} - Human-readable error.
 
-## Examples:
+## Examples
 
 ### GET request
 
@@ -309,12 +312,11 @@ request({
 });
 ```
 
-### File upload:
+### File upload
 
 ```js
 const fs = require('fs');
 const request = require('request-libcurl');
-
 
 fs.open('/path/to/a/file', 'r', function(err, fd) {
   if (err) {
@@ -323,7 +325,7 @@ fs.open('/path/to/a/file', 'r', function(err, fd) {
 
   request({
     method: 'POST',
-    url: '/upload',
+    url: 'https://example.com/upload',
     upload: fd,
     retry: false,
   }, (error, resp) => {
@@ -335,6 +337,35 @@ fs.open('/path/to/a/file', 'r', function(err, fd) {
   });
 });
 ```
+
+### File upload (`multipart/form-data`)
+
+In this example we are going to use [`HTTPPOST` libcurl option](https://curl.haxx.se/libcurl/c/CURLOPT_HTTPPOST.html) passing `[Object]` (*array of Objects* representing files, note: multiple files can be passed in a single request) via `curlOptions`
+
+```js
+const request = require('request-libcurl');
+const fileLocation = '/full/absolute/path/to/a/file.ext';
+
+request({
+  method: 'POST', // Can be used with PUT
+  url: 'https://example.com/upload.php',
+  retry: false,
+  curlOptions: {
+    HTTPPOST: [{
+      name: 'file.ext', // File's name
+      file: fileLocation, // Full absolute path to a file on FS
+      type: 'application/ext' // File's mime-type
+    } /*, {...} */]
+  }
+}, (error) => {
+  if (error) {
+    throw error;
+  } else {
+    // File(s) successfully uploaded
+  }
+});
+```
+
 
 ## Running Tests
 
@@ -351,9 +382,11 @@ npm install --save
 PORT=3003 npm test
 # PORT env.var is required! And can be changed to any open port!
 # Note: The Internet connection is required to perform tests
+# Note: Test-suite includes "no response" and "timeouted responces"
+# if a test looks stuck — give it another minute before interrupting it
 ```
 
-## Support our open source contribution:
+## Support our open source contribution
 
 - [Become a patron](https://www.patreon.com/bePatron?u=20396046) — support my open source contributions with monthly donation
 - Use [ostr.io](https://ostr.io) — [Monitoring](https://snmp-monitoring.com), [Analytics](https://ostr.io/info/web-analytics), [WebSec](https://domain-protection.info), [Web-CRON](https://web-cron.info) and [Pre-rendering](https://prerendering.com) for a website
