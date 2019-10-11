@@ -273,7 +273,7 @@ const request = require('request-libcurl');
 const querystring = require('querystring');
 
 // POST (Content-Type: application/x-www-form-urlencoded):
-// by passing a String or QueryString Object to `form`
+// by passing a String or formatted "Query String" to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
@@ -283,7 +283,7 @@ request({
 });
 
 // POST with Authorization (Content-Type: application/x-www-form-urlencoded):
-// by passing a String or QueryString Object to `form`
+// by passing a String or formatted "Query String" to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
