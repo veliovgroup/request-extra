@@ -31,14 +31,16 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - [Request options *detailed* description](https://github.com/VeliovGroup/request-extra#request-options):
   - [response description (*success*)](https://github.com/VeliovGroup/request-extra#response)
   - [error description (*fail*)](https://github.com/VeliovGroup/request-extra#error)
+  - [*LibCurlRequest* API](https://github.com/VeliovGroup/request-extra#returns-req-object)
 - [List of default request options](https://github.com/VeliovGroup/request-extra#request-default-options)
 - [Examples](https://github.com/VeliovGroup/request-extra#examples):
   - [GET](https://github.com/VeliovGroup/request-extra#get-request)
   - [POST](https://github.com/VeliovGroup/request-extra#post-request)
   - [POST (*advanced*)](https://github.com/VeliovGroup/request-extra#post-request-with-extra-options)
   - [File upload](https://github.com/VeliovGroup/request-extra#file-upload)
-  - [Multipart file upload](https://github.com/VeliovGroup/request-extra#file-upload-multipartform-data)
-- [Tests](https://github.com/VeliovGroup/request-extra#running-tests)
+  - [File upload (*multipart*)](https://github.com/VeliovGroup/request-extra#file-upload-multipartform-data)
+- [Running tests](https://github.com/VeliovGroup/request-extra#running-tests)
+  - [Tests](https://github.com/VeliovGroup/request-extra/blob/master/test/npm.js)
 - [Support](https://github.com/VeliovGroup/request-extra#support-our-open-source-contribution)
 
 ## Install
