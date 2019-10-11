@@ -21,7 +21,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 😎 Send GET/POST with custom `body` and headers;
 - 😎 Follow or deny redirects;
 - 📤 Upload files with a single line;
-- 🧾 Ignore or deny "broken" SSL/TLS certificates;
+- 🔐 Ignore or deny "broken" SSL/TLS certificates;
 - 💪 Bulletproof design, during development we avoid complex solutions.
 
 ## ToC:
@@ -60,7 +60,7 @@ import request from 'request-libcurl';
 
 ## Note
 
-We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or compatible only partially. Use on your own risk or wait for stable `v1.1.x`.
+We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or compatible only partially.
 
 ## API
 
@@ -149,10 +149,10 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 
 - `opts.url` or `opts.uri` {*String*} - [__Required__] Fully qualified URI with protocol `http`/`https`;
 - `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`;
-- `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string;
-- `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request. If *String* is passed `Content-Type` will be set to `application/x-www-form-urlencoded`, by passing plain *Object* `Content-Type` will be set to `application/json`. To set custom `Content-Type` — pass it to `opts.headers` *Object*;
-- `opts.upload` {*Integer*} - [Optional] To upload a file pass an *Integer* representing the *file descriptor*. When uploading a file
-- `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`;
+- `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string in a form of `username:password`;
+- `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request. If {*String*} is passed `Content-Type` will be set to `application/x-www-form-urlencoded`, by passing plain {*Object*} `Content-Type` will be set to `application/json`. To set custom `Content-Type` — pass it to `opts.headers` *Object*;
+- `opts.upload` {*Integer*} - [Optional] To upload a file pass an *Integer* representing the *file descriptor*. See [this example](https://github.com/VeliovGroup/request-extra#file-upload) for reference;
+- `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`. Note: setting custom request headers will replace default ones;
 - `opts.debug` {*Boolean*} - [Optional] Enable debug and extra logging, default: `false`;
 - `opts.retry` {*Boolean*} - [Optional] Retry request if connection is broken? Default: `true`;
 - `opts.retries` {*Number*} - [Optional] How many times retry request if connection is broken, default: `3`;
@@ -162,7 +162,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.keepAlive` {*Boolean*} - [Optional] Turn on TCP keepalive probes, default: `false`;
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
 - `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510]`;
-- `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, default: *see at the bottom of examples section*;
+- `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, [default (*at the bottom of code-block*)](https://github.com/VeliovGroup/request-extra#request-default-options);
 - `opts.rawBody` {*Boolean*} - Disable all data processing (`body` will be passed as *Buffer*, `headers` will be empty, use `.onHeaders()` hook to get headers with `rawBody` option), great option for *piping*, default: `false`;
 - `opts.noStorage` {*Boolean*} - Disable all data processing and data concatenation (`headers` and `body` won't be passed to response), great option for *piping*, default: `false`;
 - `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeaders()` and `.onBody()` hooks, default: `false`;
@@ -294,7 +294,7 @@ request({
 });
 
 // POST (Content-Type: application/json):
-// by passing an plain Object to `form`
+// by passing plain Object to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
@@ -310,7 +310,7 @@ request({
 const request = require('request-libcurl');
 
 // POST with Authorization (Content-Type: application/json):
-// by passing an plain Object to `form`
+// by passing plain Object to `form`
 request({
   method: 'POST',
   url: 'https://example.com',
@@ -321,7 +321,7 @@ request({
 });
 
 // Custom POST (Content-Type: text/plain):
-// by passing an plain Object to `form`
+// by passing custom Headers
 request({
   method: 'POST',
   url: 'https://example.com',
