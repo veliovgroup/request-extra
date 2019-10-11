@@ -16,10 +16,30 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 👷‍♂️ Follow `request` API (*simplified*);
 - 📦 The single dependency on `node-libcurl` package;
 - 😎 IDNs support (*internationalized domain names*);
+- 😎 HTTP/2 support;
 - 😎 Repeat (*built-in retries*) request on failed or broken connection;
 - 😎 Send GET/POST with custom `body` and headers;
 - 😎 Follow or deny redirects;
-- 💪 Bulletproof design, during development we plan to avoid complex solutions.
+- 📤 Upload files with a single line;
+- 🧾 Ignore or deny "broken" SSL/TLS certificates;
+- 💪 Bulletproof design, during development we avoid complex solutions.
+
+## ToC:
+
+- [Installation](https://github.com/VeliovGroup/request-extra#install)
+- [API](https://github.com/VeliovGroup/request-extra#api)
+- [Request options *detailed* description](https://github.com/VeliovGroup/request-extra#request-options):
+  - [response description (*success*)](https://github.com/VeliovGroup/request-extra#response)
+  - [error description (*fail*)](https://github.com/VeliovGroup/request-extra#error)
+- [List of default request options](https://github.com/VeliovGroup/request-extra#request-default-options)
+- [Examples](https://github.com/VeliovGroup/request-extra#examples):
+  - [GET](https://github.com/VeliovGroup/request-extra#get-request)
+  - [POST](https://github.com/VeliovGroup/request-extra#post-request)
+  - [POST (*advanced*)](https://github.com/VeliovGroup/request-extra#post-request-with-extra-options)
+  - [File upload](https://github.com/VeliovGroup/request-extra#file-upload)
+  - [Multipart file upload](https://github.com/VeliovGroup/request-extra#file-upload-multipartform-data)
+- [Tests](https://github.com/VeliovGroup/request-extra#running-tests)
+- [Support](https://github.com/VeliovGroup/request-extra#support-our-open-source-contribution)
 
 ## Install
 
@@ -148,7 +168,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate can't be validated? Default: `false`;
 - `opts.rejectUnauthorizedProxy` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate of a __proxy host__ can't be validated? Default: `false`;
 - `opts.curlOptions` {*Object*} - [Optional] Explicitly set `libcurl` options, full list of options available [here](https://curl.haxx.se/libcurl/c/curl_easy_setopt.html) and [here](https://github.com/JCMais/node-libcurl/blob/32647acc28b026bbd03aa1e3abea9cbbc8f7d43b/lib/generated/CurlOption.ts#L3286);
-- `opts.curlFeatures` {*Object*} - [Optional] Explicitly __enable__ or __disable__ `libcurl` features. To __enable__ a feature pass `true` as a value, example: `{NoDataParsing: true}`. To __disable__ pass `false` as a value, example: `{NoDataParsing: false}`. Full list of available features available [here](https://github.com/JCMais/node-libcurl/blob/249323f0f3883f8cbf6d0e91a89bfecb5862da53/lib/enum/CurlFeature.ts#L7).
+- `opts.curlFeatures` {*Object*} - [Optional] Explicitly __enable__ or __disable__ `libcurl` features. To __enable__ a feature pass `true` as a value, example: `{NoDataParsing: true}`. To __disable__ pass `false` as a value, example: `{NoDataParsing: false}`. Full list of available features is available [here](https://github.com/JCMais/node-libcurl/blob/249323f0f3883f8cbf6d0e91a89bfecb5862da53/lib/enum/CurlFeature.ts#L7).
 
 __Notes__:
 
@@ -365,7 +385,6 @@ request({
   }
 });
 ```
-
 
 ## Running Tests
 
