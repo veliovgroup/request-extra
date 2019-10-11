@@ -20,7 +20,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 😎 Repeat (*built-in retries*) request on failed or broken connection;
 - 😎 Send GET/POST with custom `body` and headers;
 - 😎 Follow or deny redirects;
-- 📤 Upload files with a single line;
+- 📤 [Upload files with a single line](https://github.com/VeliovGroup/request-extra#file-upload);
 - 🔐 Ignore or deny "broken" SSL/TLS certificates;
 - 💪 Bulletproof design, during development we avoid complex solutions.
 
@@ -120,6 +120,7 @@ request.defaultOptions = {
   maxRedirects: 4,
   followRedirect: true,
   rejectUnauthorized: false,
+  rejectUnauthorizedProxy: false,
   badStatuses: [ 300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510 ],
   isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
     return badStatuses.includes(statusCode) || statusCode >= 500;
