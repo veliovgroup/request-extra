@@ -89,6 +89,35 @@ describe('LibCurlRequest', function () {
   });
 
   describe('BASICS', () => {
+    it('GET/HTTP/IP-ADDRESS', (done) => {
+      request({
+        url: 'http://1.1.1.1'
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isObject(resp.headers, 'Headers Object is presented');
+        assert.equal(resp.headers['content-type'], 'text/html', 'Correct content-type header');
+        assert.equal(resp.headers.location, 'https://1.1.1.1/', 'Correct location header');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/IP-ADDRESS', (done) => {
+      request({
+        url: 'https://1.1.1.1'
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isObject(resp.headers, 'Headers Object is presented');
+        assert.equal(resp.headers['content-type'], 'text/html', 'Correct content-type header');
+        done();
+      });
+    });
+
     it('DELETE/HTTP/httpbin', (done) => {
       request({
         method: 'DELETE',
