@@ -176,6 +176,8 @@ const sendRequest = (libcurl, url, cb) => {
       statusCode = 503;
     } else if (errorCode === 47) {
       statusCode = 429;
+    } else if (errorCode === 60 || errorCode === 91) {
+      statusCode = 526;
     }
 
     error.code       = errorCode;
