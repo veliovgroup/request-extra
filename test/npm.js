@@ -934,6 +934,36 @@ describe('LibCurlRequest', function () {
       });
     });
 
+    it('GET/HTTP/IDN', (done) => {
+      request({
+        url: 'http://яндекс.рф'
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
+        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "content-type" header is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/IDN', (done) => {
+      request({
+        url: 'https://яндекс.рф',
+        rejectUnauthorized: true,
+        rejectUnauthorizedProxy: true
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
+        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "content-type" header is presented');
+        done();
+      });
+    });
+
     it('GET/no-response', (done) => {
       request({
         url: TEST_URL + '/no-response',
@@ -1048,6 +1078,206 @@ describe('LibCurlRequest', function () {
       });
 
       req.send();
+    });
+  });
+
+  describe('HTTPS/HANDLE ERRORS', () => {
+    it('GET/HTTPS/ERROR/EXPIRED [no reject]', (done) => {
+      request({
+        url: 'https://expired.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('expired.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/EXPIRED [reject]', (done) => {
+      request({
+        url: 'https://expired.badssl.com/',
+        rejectUnauthorized: true
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 60, 'status: 60');
+        assert.equal(error.code, 60, 'code: 60');
+        assert.equal(error.message, 'Error: SSL peer certificate or SSH remote key was not OK', 'error message is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/WRONG HOST [no reject]', (done) => {
+      request({
+        url: 'https://wrong.host.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('wrong.host.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/WRONG HOST [reject]', (done) => {
+      request({
+        url: 'https://wrong.host.badssl.com/',
+        rejectUnauthorized: true
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 60, 'status: 60');
+        assert.equal(error.code, 60, 'code: 60');
+        assert.equal(error.message, 'Error: SSL peer certificate or SSH remote key was not OK', 'error message is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/SELF-SIGNED [no reject]', (done) => {
+      request({
+        url: 'https://self-signed.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('self-signed.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/SELF-SIGNED [reject]', (done) => {
+      request({
+        url: 'https://self-signed.badssl.com/',
+        rejectUnauthorized: true
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 60, 'status: 60');
+        assert.equal(error.code, 60, 'code: 60');
+        assert.equal(error.message, 'Error: SSL peer certificate or SSH remote key was not OK', 'error message is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/UNTRUSTED-ROOT [no reject]', (done) => {
+      request({
+        url: 'https://untrusted-root.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('untrusted-root.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/UNTRUSTED-ROOT [reject]', (done) => {
+      request({
+        url: 'https://untrusted-root.badssl.com/',
+        rejectUnauthorized: true
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 60, 'status: 60');
+        assert.equal(error.code, 60, 'code: 60');
+        assert.equal(error.message, 'Error: SSL peer certificate or SSH remote key was not OK', 'error message is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/REVOKED [no reject]', (done) => {
+      request({
+        url: 'https://revoked.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('revoked.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/REVOKED [reject]', (done) => {
+      request({
+        url: 'https://revoked.badssl.com/',
+        rejectUnauthorized: true,
+        curlOptions: {
+          SSL_VERIFYSTATUS: 1 // Check certificate status via OCSP
+        }
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 91, 'status: 91');
+        assert.equal(error.code, 91, 'code: 91');
+        assert.equal(error.message, 'Error: SSL server certificate status verification FAILED', 'error message is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/PINNING [no reject]', (done) => {
+      request({
+        url: 'https://pinning-test.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('pinning-test.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/PINNING [reject]', (done) => {
+      request({
+        url: 'https://pinning-test.badssl.com/',
+        rejectUnauthorized: true,
+        curlOptions: {
+          SSL_VERIFYSTATUS: 1 // Check certificate status via OCSP
+        }
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 91, 'status: 91');
+        assert.equal(error.code, 91, 'code: 91');
+        assert.equal(error.message, 'Error: SSL server certificate status verification FAILED', 'error message is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/no-common-name [no reject]', (done) => {
+      request({
+        url: 'https://no-common-name.badssl.com/'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.body.includes('no-common-name.badssl.com'), 'Has correct body response');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/ERROR/no-common-name [reject]', (done) => {
+      request({
+        url: 'https://no-common-name.badssl.com/',
+        rejectUnauthorized: true,
+        curlOptions: {
+          SSL_VERIFYSTATUS: 1 // Check certificate status via OCSP
+        }
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'no response');
+        assert.equal(error.statusCode, 526, 'statusCode: 526');
+        assert.equal(error.status, 526, 'status: 526');
+        assert.equal(error.errorCode, 91, 'status: 91');
+        assert.equal(error.code, 91, 'code: 91');
+        assert.equal(error.message, 'Error: SSL server certificate status verification FAILED', 'error message is presented');
+        done();
+      });
     });
   });
 });
