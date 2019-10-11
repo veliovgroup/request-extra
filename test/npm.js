@@ -20,29 +20,31 @@ const server = http.createServer(function (req, res) {
   req.on('end', () => {
     if (req.method === 'GET') {
       if (req.url.endsWith('text-plain')) {
-        res.writeHead(200, {'Content-Type': 'text/plain; charset=UTF-8'});
+        res.writeHead(200, {'Content-Type': 'text/plain; charset=UTF-8', Connection: 'close'});
         res.end('plain text response');
       } else if (req.url.endsWith('text-html')) {
-        res.writeHead(200, {'Content-Type': 'text/html; charset=UTF-8'});
+        res.writeHead(200, {'Content-Type': 'text/html; charset=UTF-8', Connection: 'close'});
         res.end('<html><head></head><body></body></html>');
       } else if (req.url.endsWith('json')) {
-        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
+        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', Connection: 'close'});
         res.end(JSON.stringify({key: 'value'}));
       } else if (req.url.endsWith('custom-header')) {
-        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', 'x-custom-header': req.headers['x-custom-header']});
+        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', Connection: 'close', 'x-custom-header': req.headers['x-custom-header']});
         res.end(JSON.stringify({'x-custom-header': req.headers['x-custom-header']}));
       } else if (req.url.endsWith('rfc2616.pdf')) {
         res.writeHead(200, {
           'Content-Type': 'application/pdf',
           'Accept-Ranges': 'bytes',
-          'Content-Disposition': `attachment; filename="rfc2616.pdf"; filename*=UTF-8''rfc2616.pdf; charset=UTF-8`
+          'Content-Disposition': `attachment; filename="rfc2616.pdf"; filename*=UTF-8''rfc2616.pdf; charset=UTF-8`,
+          Connection: 'close'
         });
         fs.createReadStream(path.resolve('.') + '/test/rfc2616.pdf').pipe(res);
       } else if (req.url.endsWith('bb.jpg')) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
           'Accept-Ranges': 'bytes',
-          'Content-Disposition': `attachment; filename="bb.jpg"; filename*=UTF-8''bb.jpg; charset=UTF-8`
+          'Content-Disposition': `attachment; filename="bb.jpg"; filename*=UTF-8''bb.jpg; charset=UTF-8`,
+          Connection: 'close'
         });
         fs.createReadStream(path.resolve('.') + '/test/bb.jpg').pipe(res);
       } else if (req.url.endsWith('no-response')) {
@@ -57,15 +59,15 @@ const server = http.createServer(function (req, res) {
       }
     } else if (req.method === 'POST') {
       if (req.url.endsWith('plain-text')) {
-        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
+        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', Connection: 'close'});
         const obj = {
           headers: req.headers,
           data: data.toString('utf8')
         };
         res.end(JSON.stringify(obj));
       } else if (req.url.endsWith('upload')) {
-        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
-        res.end(JSON.stringify({messageLength: data.length}));
+        res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', Connection: 'close'});
+        res.end(JSON.stringify({messageLength: data.length, headers: req.headers}));
       } else {
         res.writeHead(204);
         res.end();
@@ -817,6 +819,41 @@ describe('LibCurlRequest', function () {
           assert.equal(body.messageLength, origFile.byteLength, 'Form received and returned correctly');
           done();
         });
+      });
+    });
+
+    it('UPLOAD/POST/PDF via MULTIPART and libcurl options', (done) => {
+      const fileLocation = path.resolve('.') + '/test/rfc2616.pdf';
+
+      request({
+        method: 'POST',
+        url: TEST_URL + '/upload',
+        curlFeatures: {
+          NoDataParsing: true,
+          NoHeaderParsing: true
+        },
+        curlOptions: {
+          HTTPPOST: [{
+            name: 'rfc2616.pdf',
+            file: fileLocation,
+            type: 'application/pdf'
+          }, {
+            name: 'input-name',
+            contents: 'Form contents string'
+          }]
+        }
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.isOk(resp.body instanceof Buffer, 'Body instanceof Buffer');
+        const body = JSON.parse(resp.body.toString('utf8'));
+        assert.isObject(body, 'Body is Object');
+        assert.isObject(body.headers, 'Body.Headers is Object');
+        assert.isOk(body.headers['content-type'].startsWith('multipart/form-data;'), '"content-type" header');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.equal(body.messageLength, 272360, 'Form received and returned correctly');
+        done();
       });
     });
   });
