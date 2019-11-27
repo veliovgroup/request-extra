@@ -1,7 +1,9 @@
-.npm
-.github
+*.md
 .DS_Store
 .eslintcache
+.eslintrc
+.github
+.npm
 node_modules
 npm-debug.log*
 test/
