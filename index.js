@@ -143,7 +143,6 @@ const sendRequest = (libcurl, url, cb) => {
   curl.on('end', (statusCode, body, _headers) => {
     libcurl._debug('[END EVENT]', opts.retries, url.href, finished, statusCode);
     stopRequestTimeout();
-    libcurl.stopRequestTimeout();
     if (finished) { return; }
 
     finished = true;
@@ -165,7 +164,6 @@ const sendRequest = (libcurl, url, cb) => {
   curl.on('error', (error, errorCode) => {
     libcurl._debug('REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
     stopRequestTimeout();
-    libcurl.stopRequestTimeout();
     if (finished) { return; }
 
     finished = true;
@@ -352,6 +350,7 @@ class LibCurlRequest {
 
     if (!isRetry) {
       this.finished = true;
+      this.stopRequestTimeout();
       if (error) {
         this.cb(error);
       } else {
@@ -376,6 +375,8 @@ class LibCurlRequest {
 
   abort() {
     this._debug('[abort]', this.opts.uri || this.opts.url);
+    this.stopRequestTimeout();
+
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = false;
