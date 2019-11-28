@@ -21,10 +21,10 @@ const badRequestError = {
 
 const abortError = {
   code: 42,
-  status: 408,
-  message: '408: Request aborted (timeout)',
+  status: 499,
+  message: '499: Client Closed Request',
   errorCode: 42,
-  statusCode: 408
+  statusCode: 499
 };
 
 const noop = () => {};

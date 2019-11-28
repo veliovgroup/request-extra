@@ -97,9 +97,9 @@ describe('LibCurlRequest', function () {
         assert.isObject(error, 'error isObject');
         assert.equal(error.code, 42, 'error.code is 42');
         assert.equal(error.errorCode, 42, 'error.errorCode is 42');
-        assert.equal(error.status, 408, 'error.status is 408');
-        assert.equal(error.statusCode, 408, 'error.statusCode is 408');
-        assert.equal(error.message, '408: Request aborted (timeout)', 'error.message is correctly set');
+        assert.equal(error.status, 499, 'error.status is 499');
+        assert.equal(error.statusCode, 499, 'error.statusCode is 499');
+        assert.equal(error.message, '499: Client Closed Request', 'error.message is correctly set');
         done();
       });
 
