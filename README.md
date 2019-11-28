@@ -404,7 +404,7 @@ npm install --save
 PORT=3003 npm test
 # PORT env.var is required! And can be changed to any open port!
 # Note: The Internet connection is required to perform tests
-# Note: Test-suite includes "no response" and "timeouted responces"
+# Note: Test-suite includes "no response" and "timeouted responses"
 # if a test looks stuck — give it another minute before interrupting it
 ```
 
