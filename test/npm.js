@@ -89,6 +89,27 @@ describe('LibCurlRequest', function () {
   });
 
   describe('BASICS', () => {
+    it('.abort()', (done) => {
+      const req = request({
+        url: 'http://яндекс.рф'
+      }, (error, resp) => {
+        assert.equal(resp, void 0, '`resp` is undefined');
+        assert.isObject(error, 'error isObject');
+        assert.equal(error.code, 42, 'error.code is 42');
+        assert.equal(error.errorCode, 42, 'error.errorCode is 42');
+        assert.equal(error.status, 408, 'error.status is 408');
+        assert.equal(error.statusCode, 408, 'error.statusCode is 408');
+        assert.equal(error.message, '408: Request aborted (timeout)', 'error.message is correctly set');
+        done();
+      });
+
+      assert.equal(req.finished, false, '.finished is false');
+      process.nextTick(() => {
+        req.abort();
+        assert.equal(req.finished, true, '.finished is true');
+      });
+    });
+
     it('GET/HTTP/IP-ADDRESS', (done) => {
       request({
         url: 'http://1.1.1.1'
