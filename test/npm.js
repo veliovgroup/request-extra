@@ -8,7 +8,10 @@ const { assert }       = require('chai');
 const { it, describe } = require('mocha');
 
 const PORT = parseInt(process.env.PORT || 3003);
+const DEBUG = (process.env.DEBUG === 'true') ? true : false;
 const TEST_URL = `http://127.0.0.1:${PORT}`;
+
+request.defaultOptions.debug = DEBUG;
 
 const server = http.createServer(function (req, res) {
   let data = Buffer.from('');
@@ -986,21 +989,21 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTP/IDN', (done) => {
       request({
-        url: 'http://яндекс.рф'
+        url: 'http://яндекс.рф' //xn--d1acpjx3f.xn--p1ai
       }, (error, resp) => {
         assert.isOk(true, 'got response');
         assert.isUndefined(error, 'no error presented');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "content-type" header is presented');
+        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
 
     it('GET/HTTPS/IDN', (done) => {
       request({
-        url: 'https://яндекс.рф',
+        url: 'https://яндекс.рф', //xn--d1acpjx3f.xn--p1ai
         rejectUnauthorized: true,
         rejectUnauthorizedProxy: true
       }, (error, resp) => {
@@ -1009,7 +1012,37 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "content-type" header is presented');
+        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTP/T-IDN', (done) => {
+      request({
+        url: 'http://xn--d1acpjx3f.xn--p1ai' //яндекс.рф
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
+        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
+        done();
+      });
+    });
+
+    it('GET/HTTPS/T-IDN', (done) => {
+      request({
+        url: 'https://xn--d1acpjx3f.xn--p1ai', //яндекс.рф
+        rejectUnauthorized: true,
+        rejectUnauthorizedProxy: true
+      }, (error, resp) => {
+        assert.isOk(true, 'got response');
+        assert.isUndefined(error, 'no error presented');
+        assert.equal(resp.statusCode, 200, 'statusCode: 200');
+        assert.equal(resp.status, 200, 'status: 200');
+        assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
+        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
