@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "index.js",
   "scripts": {
@@ -38,6 +38,6 @@
     "mocha": "^6.2.2"
   },
   "dependencies": {
-    "node-libcurl": "^2.0.2"
+    "node-libcurl": "^2.0.3"
   }
 }
