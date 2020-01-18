@@ -85,21 +85,43 @@ const sendRequest = (libcurl, url, cb) => {
     curl.setOpt(Curl.option.PROXY, url.origin);
   }
 
-  curl.setOpt(Curl.option.NOPROGRESS, true);
-  curl.setOpt(Curl.option.TIMEOUT_MS, opts.timeout);
-  curl.setOpt(Curl.option.MAXREDIRS, opts.maxRedirects);
-  curl.setOpt(Curl.option.CUSTOMREQUEST, opts.method);
-  curl.setOpt(Curl.option.FOLLOWLOCATION, opts.followRedirect);
-  curl.setOpt(Curl.option.SSL_VERIFYPEER, opts.rejectUnauthorized ? 1 : 0);
-  curl.setOpt(Curl.option.PROXY_SSL_VERIFYPEER, opts.rejectUnauthorizedProxy ? 1 : 0);
-  curl.setOpt(Curl.option.SSL_VERIFYHOST, opts.rejectUnauthorized ? 2 : 0);
-  curl.setOpt(Curl.option.PROXY_SSL_VERIFYHOST, opts.rejectUnauthorizedProxy ? 2 : 0);
-  curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
+  if (Curl.option.NOPROGRESS !== undefined) {
+    curl.setOpt(Curl.option.NOPROGRESS, true);
+  }
+  if (Curl.option.TIMEOUT_MS !== undefined) {
+    curl.setOpt(Curl.option.TIMEOUT_MS, opts.timeout);
+  }
+  if (Curl.option.MAXREDIRS !== undefined) {
+    curl.setOpt(Curl.option.MAXREDIRS, opts.maxRedirects);
+  }
+  if (Curl.option.CUSTOMREQUEST !== undefined) {
+    curl.setOpt(Curl.option.CUSTOMREQUEST, opts.method);
+  }
+  if (Curl.option.FOLLOWLOCATION !== undefined) {
+    curl.setOpt(Curl.option.FOLLOWLOCATION, opts.followRedirect);
+  }
+  if (Curl.option.SSL_VERIFYPEER !== undefined) {
+    curl.setOpt(Curl.option.SSL_VERIFYPEER, opts.rejectUnauthorized ? 1 : 0);
+  }
+  if (Curl.option.PROXY_SSL_VERIFYPEER !== undefined) {
+    curl.setOpt(Curl.option.PROXY_SSL_VERIFYPEER, opts.rejectUnauthorizedProxy ? 1 : 0);
+  }
+  if (Curl.option.SSL_VERIFYHOST !== undefined) {
+    curl.setOpt(Curl.option.SSL_VERIFYHOST, opts.rejectUnauthorized ? 2 : 0);
+  }
+  if (Curl.option.PROXY_SSL_VERIFYHOST !== undefined) {
+    curl.setOpt(Curl.option.PROXY_SSL_VERIFYHOST, opts.rejectUnauthorizedProxy ? 2 : 0);
+  }
+  if (Curl.option.CONNECTTIMEOUT_MS !== undefined) {
+    curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
+  }
 
-  if (opts.keepAlive === true) {
-    curl.setOpt(Curl.option.TCP_KEEPALIVE, 1);
-  } else {
-    curl.setOpt(Curl.option.TCP_KEEPALIVE, 0);
+  if (Curl.option.TCP_KEEPALIVE !== undefined) {
+    if (opts.keepAlive === true) {
+      curl.setOpt(Curl.option.TCP_KEEPALIVE, 1);
+    } else {
+      curl.setOpt(Curl.option.TCP_KEEPALIVE, 0);
+    }
   }
 
   const customHeaders = [];
@@ -122,10 +144,12 @@ const sendRequest = (libcurl, url, cb) => {
     }
   }
 
-  if (!hasAcceptEncoding) {
-    curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
-  } else {
-    curl.setOpt(Curl.option.ACCEPT_ENCODING, hasAcceptEncoding);
+  if (Curl.option.ACCEPT_ENCODING !== undefined) {
+    if (!hasAcceptEncoding) {
+      curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
+    } else {
+      curl.setOpt(Curl.option.ACCEPT_ENCODING, hasAcceptEncoding);
+    }
   }
 
   if (opts.auth) {

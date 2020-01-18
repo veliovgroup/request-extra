@@ -39,6 +39,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
   - [POST (*advanced*)](https://github.com/VeliovGroup/request-extra#post-request-with-extra-options)
   - [File upload](https://github.com/VeliovGroup/request-extra#file-upload)
   - [File upload (*multipart*)](https://github.com/VeliovGroup/request-extra#file-upload-multipartform-data)
+- [Known Issues](https://github.com/VeliovGroup/request-extra#known-issues)
 - [Running tests](https://github.com/VeliovGroup/request-extra#running-tests)
   - [Tests](https://github.com/VeliovGroup/request-extra/blob/master/test/npm.js)
 - [Support](https://github.com/VeliovGroup/request-extra#support-our-open-source-contribution)
@@ -388,6 +389,24 @@ request({
   }
 });
 ```
+
+## Known Issues
+
+Due to single dependency on `node-libcurl` which shipped with statically built binaries, you may encounter `This module was compiled against a different Node.js version using NODE_MODULE_VERSION` error. This may happen on edge cases, like running the very latest release of node.js (*while bundled builds aren't shipped yet*), then you may want to build this package locally, use one of next commands:
+
+```shell
+# Build library
+npm install --save request-libcurl --build-from-source
+
+# Build library and curl executables:
+npm install --save request-libcurl --build-from-source --curl_static_build=true
+
+# In case if you encounter errors during building package locally:
+# 1. Execute same command as "sudo" (e.g. administrator), and try again
+# 2. Install globally node-gyp and node-pre-gyp NPM packages, and try again
+```
+
+For more details and instructions for different platforms read `node-libcurl` [official docs](https://github.com/JCMais/node-libcurl#important-notes-on-prebuilt-binaries--direct-installation). __Note__: It's highly recommended to [run tests](https://github.com/VeliovGroup/request-extra#running-tests) after building package locally.
 
 ## Running Tests
 
