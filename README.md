@@ -392,13 +392,31 @@ request({
 
 ## Known Issues
 
+### 1. SSL connect error code: 35
+
+To address most common issue with SSL certificates and speed up response time — SSL/TLS certificates validation is disabled in this package by default. But on edge cases this may return error-code `35` on SNI-enabled hosts. To solve this issue add `{ rejectUnauthorized: true }` to request object.
+
+To change `rejectUnauthorized` option globally use:
+
+```js
+request.defaultOptions.rejectUnauthorized = true;
+```
+
+### 2. Compiled against Different Node.js version
+
 Due to single dependency on `node-libcurl` which shipped with statically built binaries, you may encounter `This module was compiled against a different Node.js version using NODE_MODULE_VERSION` error. This may happen on edge cases, like running the very latest release of node.js (*while bundled builds aren't shipped yet*), then you may want to build this package locally, use one of next commands:
 
 ```shell
-# Build library
+# Please see options below, in dependence from version of NPM and Node.js
+# one of this options should solve this issue
+
+# Option 1: Update and rebuild locally installed binaries
+npm rebuild --update-binary --build-from-source
+
+# Option 2: Build library
 npm install --save request-libcurl --build-from-source
 
-# Build library and curl executables:
+# Option 3: Build library and curl executables:
 npm install --save request-libcurl --build-from-source --curl_static_build=true
 
 # In case if you encounter errors during building package locally:
