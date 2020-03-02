@@ -15,11 +15,11 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 👨‍💻 98% tests coverage + TDD (*only for http(s)*);
 - 👷‍♂️ Follow `request` API (*simplified*);
 - 📦 The single dependency on `node-libcurl` package;
-- 😎 IDNs support (*internationalized domain names*);
+- ㊗️ IDNs support (*internationalized domain names*);
+- 🛡 Repeat (*built-in retries*) request on failed or broken connection;
 - 😎 HTTP/2 support;
-- 😎 Repeat (*built-in retries*) request on failed or broken connection;
-- 😎 Send GET/POST with custom `body` and headers;
-- 😎 Follow or deny redirects;
+- 🎒 Send GET/POST with custom `body` and headers;
+- 🚦 Follow or deny redirects;
 - 📤 [Upload files with a single line](https://github.com/VeliovGroup/request-extra#file-upload);
 - 🔐 Ignore or deny "broken" SSL/TLS certificates;
 - 💪 Bulletproof design, during development we avoid complex solutions.

@@ -1003,7 +1003,7 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/IDN', (done) => {
       request({
-        url: 'https://яндекс.рф', //xn--d1acpjx3f.xn--p1ai
+        url: 'https://i❤️.ws', //xn--i-7iq.ws
         rejectUnauthorized: true,
         rejectUnauthorizedProxy: true
       }, (error, resp) => {
@@ -1012,7 +1012,6 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
@@ -1033,7 +1032,7 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/T-IDN', (done) => {
       request({
-        url: 'https://xn--d1acpjx3f.xn--p1ai', //яндекс.рф
+        url: 'https://xn--i-7iq.ws', //i❤️.ws
         rejectUnauthorized: true,
         rejectUnauthorizedProxy: true
       }, (error, resp) => {
@@ -1042,7 +1041,6 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
