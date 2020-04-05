@@ -4,6 +4,10 @@
   <img src="https://c5.patreon.com/external/logo/become_a_patron_button@2x.png" width="160">
 </a>
 
+<a href="https://ostr.io/info/built-by-developers-for-developers">
+  <img src="https://ostr.io/apple-touch-icon-60x60.png" height="38">
+</a>
+
 ```shell
 npm install --save request-libcurl
 ```
