@@ -164,12 +164,21 @@ const sendRequest = (libcurl, url, cb) => {
     curl.on('header', libcurl.onHeader);
   }
 
+  if (libcurl.pipeTo) {
+    curl.on('data', (data) => {
+      libcurl.pipeTo.write(data);
+    });
+  }
+
   curl.on('end', (statusCode, body, _headers) => {
     libcurl._debug('[END EVENT]', opts.retries, url.href, finished, statusCode);
     stopRequestTimeout();
     if (finished) { return; }
 
     finished = true;
+    if (libcurl.pipeTo) {
+      libcurl.pipeTo.end();
+    }
     curl.close();
 
     const headers = {};
@@ -335,12 +344,23 @@ class LibCurlRequest {
     }
   }
 
+  pipe(writableStream) {
+    if (writableStream.write && writableStream.end) {
+      this.pipeTo = writableStream;
+    } else {
+      throw new TypeError('[request-libcurl] [.pipe()] method accepts only {stream.Writable}');
+    }
+    return this;
+  }
+
   onData(callback) {
     this.onData = callback;
+    return this;
   }
 
   onHeader(callback) {
     this.onHeader = callback;
+    return this;
   }
 
   _retry() {

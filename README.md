@@ -23,6 +23,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 🛡 Repeat (*built-in retries*) request on failed or broken connection;
 - 😎 HTTP/2 support;
 - 🎒 Send GET/POST with custom `body` and headers;
+- 🗂 Pipe to the file;
 - 🚦 Follow or deny redirects;
 - 📤 [Upload files with a single line](https://github.com/VeliovGroup/request-extra#file-upload);
 - 🔐 Ignore or deny "broken" SSL/TLS certificates;
@@ -41,6 +42,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
   - [GET](https://github.com/VeliovGroup/request-extra#get-request)
   - [POST](https://github.com/VeliovGroup/request-extra#post-request)
   - [POST (*advanced*)](https://github.com/VeliovGroup/request-extra#post-request-with-extra-options)
+  - [File download via `.pipe()`](https://github.com/VeliovGroup/request-extra#file-download)
   - [File upload](https://github.com/VeliovGroup/request-extra#file-upload)
   - [File upload (*multipart*)](https://github.com/VeliovGroup/request-extra#file-upload-multipartform-data)
 - [Known Issues](https://github.com/VeliovGroup/request-extra#known-issues)
@@ -338,6 +340,32 @@ request({
 }, (error, resp) => {
   /* ... */
 });
+```
+
+### File download
+
+Download a file to the FileSystem using `.pipe()` method:
+
+```js
+const fs = require('fs');
+const request = require('request-libcurl');
+
+const req = request({
+  url: 'https://example.com/file.pdf',
+  wait: true
+}, (error, resp) => {
+  if (error) {
+    throw error;
+  } else {
+    // File successfully downloaded
+    fs.stat('/path/to/file.pdf', (error, stats) => {
+      // do something with downloaded file
+    });
+  }
+});
+
+req.pipe(fs.createWriteStream('/path/to/file.pdf', {flags: 'w'}));
+req.send();
 ```
 
 ### File upload
