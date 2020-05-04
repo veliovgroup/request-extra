@@ -302,7 +302,7 @@ class LibCurlRequest {
 
     this._debug('[constructor]', this.opts.uri || this.opts.url);
 
-    this.stopRequestTimeout = () => {
+    this._stopRequestTimeout = () => {
       if (this.timeoutTimer) {
         clearTimeout(this.timeoutTimer);
         this.timeoutTimer = null;
@@ -374,7 +374,7 @@ class LibCurlRequest {
 
     if (!isRetry) {
       this.finished = true;
-      this.stopRequestTimeout();
+      this._stopRequestTimeout();
       if (error) {
         this.cb(error);
       } else {
@@ -399,7 +399,7 @@ class LibCurlRequest {
 
   abort() {
     this._debug('[abort]', this.opts.uri || this.opts.url);
-    this.stopRequestTimeout();
+    this._stopRequestTimeout();
 
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
