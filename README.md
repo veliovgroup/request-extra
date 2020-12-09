@@ -1,3 +1,4 @@
+[![support](https://img.shields.io/badge/support-GitHub-white)](https://github.com/sponsors/dr-dimitru)
 [![support](https://img.shields.io/badge/support-PayPal-white)](https://paypal.me/veliovgroup)
 <a href="https://ostr.io/info/built-by-developers-for-developers">
   <img src="https://ostr.io/apple-touch-icon-60x60.png" height="20">
@@ -241,7 +242,7 @@ req.send();
 ```js
 const request = require('request-libcurl');
 const req     = request({url: 'https://example.com'});
-````
+```
 
 - `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
 - `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or hooks
@@ -259,6 +260,8 @@ const req     = request({url: 'https://example.com'});
   - `error.message` {*String*} - Human-readable error.
 
 ## Examples
+
+Send GET and POST requests, download and upload files — all just in few lines of code.
 
 ### GET request
 
@@ -421,6 +424,8 @@ request({
 
 ## Known Issues
 
+Got an issue? Start with checking "Known Issues" section below.
+
 ### 1. SSL connect error code: 35
 
 To address most common issue with SSL certificates and speed up response time — SSL/TLS certificates validation is disabled in this package by default. But on edge cases this may return error-code `35` on SNI-enabled hosts. To solve this issue add `{ rejectUnauthorized: true }` to request object.
@@ -478,5 +483,6 @@ DEBUG=true PORT=3003 npm test
 
 ## Support our open source contribution
 
+- [Sponsor via GitHub](https://github.com/sponsors/dr-dimitru)
 - [Support via PayPal](https://paypal.me/veliovgroup) — support my open source contributions once or on regular basis
-- Use [ostr.io](https://ostr.io) — [Monitoring](https://snmp-monitoring.com), [Analytics](https://ostr.io/info/web-analytics), [WebSec](https://domain-protection.info), [Web-CRON](https://web-cron.info) and [Pre-rendering](https://prerendering.com) for a website
+- Use [ostr.io](https://ostr.io) — [Monitoring](https://snmp-monitoring.com), [Analytics](https://ostr.io/info/web-analytics), [WebSec](https://domain-protection.info), [Web-CRON](https://web-cron.info) and [Pre-rendering](https://prerendering.com) for a websiteWebSec](https://domain-protection.info), [Web-CRON](https://web-cron.info) and [Pre-rendering](https://prerendering.com) for a website
