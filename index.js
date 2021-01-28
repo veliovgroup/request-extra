@@ -1,7 +1,10 @@
 'use strict';
 
+const fs = require('fs');
 const { URL } = require('url');
 const { Curl, CurlFeature } = require('node-libcurl');
+const SSL_ERROR_CODES = [58, 60, 83, 90, 91];
+const CURL_ERROR_CODES = [3, 4, 47];
 
 const badUrlError = {
   code: 3,
@@ -30,7 +33,7 @@ const abortError = {
 const noop = () => {};
 
 const _debug = (...args) => {
-  console.info.call(console, '[DEBUG] [request-libcurl]', ...args);
+  (console.info || console.log).call(console, '[DEBUG] [request-libcurl]', ...args);
 };
 
 const closeCurl = (curl) => {
@@ -48,13 +51,13 @@ const sendRequest = (libcurl, url, cb) => {
 
   closeCurl(libcurl.curl);
 
-  const opts       = libcurl.opts;
-  const curl       = new Curl();
-  let finished     = false;
+  const opts = libcurl.opts;
+  const curl = new Curl();
+  let finished = false;
   let timeoutTimer = null;
   let isJsonUpload = false;
-  let hasContentType    = false;
-  let hasContentLength  = false;
+  let hasContentType = false;
+  let hasContentLength = false;
   let hasAcceptEncoding = false;
 
   const stopRequestTimeout = () => {
@@ -76,7 +79,7 @@ const sendRequest = (libcurl, url, cb) => {
     curl.enable(CurlFeature.NoStorage);
   }
 
-  curl.setOpt('URL', url.href);
+  curl.setOpt(Curl.option.URL, url.href);
   curl.setOpt(Curl.option.VERBOSE, opts.debug);
 
   if (opts.proxy && typeof opts.proxy === 'string') {
@@ -156,17 +159,21 @@ const sendRequest = (libcurl, url, cb) => {
     customHeaders.push(`Authorization: Basic ${Buffer.from(opts.auth).toString('base64')}`);
   }
 
-  if (libcurl.onData) {
-    curl.on('data', libcurl.onData);
+  if (libcurl._onHeader) {
+    curl.on('header', libcurl._onHeader);
   }
 
-  if (libcurl.onHeader) {
-    curl.on('header', libcurl.onHeader);
-  }
-
-  if (libcurl.pipeTo) {
+  if ((libcurl.pipeTo && libcurl.pipeTo.length) || libcurl._onData) {
     curl.on('data', (data) => {
-      libcurl.pipeTo.write(data);
+      if (libcurl._onData) {
+        libcurl._onData(data);
+      }
+
+      if (libcurl.pipeTo && libcurl.pipeTo.length) {
+        for (const writableStream of libcurl.pipeTo) {
+          writableStream.write(data);
+        }
+      }
     });
   }
 
@@ -174,12 +181,7 @@ const sendRequest = (libcurl, url, cb) => {
     libcurl._debug('[END EVENT]', opts.retries, url.href, finished, statusCode);
     stopRequestTimeout();
     if (finished) { return; }
-
     finished = true;
-    if (libcurl.pipeTo) {
-      libcurl.pipeTo.end();
-    }
-    curl.close();
 
     const headers = {};
     if (_headers && _headers[0]) {
@@ -191,7 +193,24 @@ const sendRequest = (libcurl, url, cb) => {
       }
     }
 
-    cb(void 0, {statusCode, status: statusCode, body, headers});
+    const finish = () => {
+      curl.close();
+      cb(void 0, {statusCode, status: statusCode, body, headers});
+    };
+
+    if (libcurl.pipeTo && libcurl.pipeTo.length) {
+      let i = 0;
+      const onStreamEnd = () => {
+        if (++i === libcurl.pipeTo.length) {
+          finish();
+        }
+      };
+      for (const writableStream of libcurl.pipeTo) {
+        writableStream.end(onStreamEnd);
+      }
+    } else {
+      finish();
+    }
   });
 
   curl.on('error', (error, errorCode) => {
@@ -207,15 +226,31 @@ const sendRequest = (libcurl, url, cb) => {
       statusCode = 503;
     } else if (errorCode === 47) {
       statusCode = 429;
-    } else if (errorCode === 60 || errorCode === 91) {
+    } else if (SSL_ERROR_CODES.includes(errorCode)) {
       statusCode = 526;
     }
 
-    error.code       = errorCode;
-    error.status     = statusCode;
-    error.message    = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
-    error.errorCode  = errorCode;
+    error.code = errorCode;
+    error.status = statusCode;
+    error.message = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
+    error.errorCode = errorCode;
     error.statusCode = statusCode;
+
+    if (libcurl.pipeTo && libcurl.pipeTo.length) {
+      for (const writableStream of libcurl.pipeTo) {
+        if (!writableStream.destroyed) {
+          writableStream.destroy(error);
+        }
+
+        if (writableStream.path && typeof writableStream.path === 'string') {
+          try {
+            fs.unlinkSync(writableStream.path);
+          } catch (e) {
+            _debug(`Download interrupted, attempt to remove the file [fs.unlinkSync(${writableStream.path})] threw an Error:`, e);
+          }
+        }
+      }
+    }
 
     cb(error);
   });
@@ -229,7 +264,7 @@ const sendRequest = (libcurl, url, cb) => {
       try {
         opts.form = JSON.stringify(opts.form);
       } catch (e) {
-        libcurl._debug('Can\'t stringify opts.form in POST request :', url.href, e);
+        libcurl._debug('Can\'t stringify opts.form in POST request:', url.href, e);
         finished = true;
         process.nextTick(() => {
           libcurl.finished = true;
@@ -261,7 +296,17 @@ const sendRequest = (libcurl, url, cb) => {
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
     for (let option in opts.curlOptions) {
       if (Curl.option[option] !== undefined) {
-        curl.setOpt(Curl.option[option], opts.curlOptions[option]);
+        try {
+          curl.setOpt(Curl.option[option], opts.curlOptions[option]);
+        } catch (curlOptionError) {
+          curlOptionError.code = 4;
+          curlOptionError.status = 500;
+          curlOptionError.errorCode = 4;
+          curlOptionError.statusCode = 500;
+
+          cb(curlOptionError);
+          break;
+        }
       }
     }
   }
@@ -294,13 +339,18 @@ class LibCurlRequest {
   constructor (opts, cb) {
     let isBadUrl = false;
 
-    this.cb   = cb || noop;
+    if (typeof opts !== 'object') {
+      throw new TypeError('{opts} expecting an Object as first argument');
+    }
+
+    this.cb = typeof cb === 'function' ? cb : noop;
     this.sent = false;
-    this.finished     = false;
-    this.retryTimer   = false;
+    this.pipeTo = [];
+    this.finished = false;
+    this.retryTimer = false;
     this.timeoutTimer = null;
 
-    this.opts        = Object.assign({}, request.defaultOptions, opts);
+    this.opts = Object.assign({}, request.defaultOptions, opts);
     this.opts.method = this.opts.method.toUpperCase();
 
     if (this.opts.debug) {
@@ -309,7 +359,11 @@ class LibCurlRequest {
       this._debug = noop;
     }
 
-    this._debug('[constructor]', this.opts.uri || this.opts.url);
+    if (typeof this.opts.uri === 'string') {
+      this.opts.url = this.opts.uri;
+    }
+
+    this._debug('[constructor]', this.opts.url);
 
     this._stopRequestTimeout = () => {
       if (this.timeoutTimer) {
@@ -318,12 +372,12 @@ class LibCurlRequest {
       }
     };
 
-    if (!this.opts.uri && !this.opts.url) {
+    if (typeof this.opts.url !== 'string') {
       this._debug('REQUEST: NO URL PROVIDED ERROR:', opts);
       isBadUrl = true;
     } else {
       try {
-        this.url = new URL(this.opts.uri || this.opts.url);
+        this.url = new URL(this.opts.url);
       } catch (urlError) {
         this._debug('REQUEST: `new URL()` ERROR:', opts, urlError);
         isBadUrl = true;
@@ -339,6 +393,14 @@ class LibCurlRequest {
       return;
     }
 
+    if (opts.pipeTo) {
+      if (opts.pipeTo.write && opts.pipeTo.end) {
+        this.pipeTo.push(opts.pipeTo);
+      } else {
+        throw new TypeError('[request-libcurl] {opts.pipeTo} option expected to be {stream.Writable}');
+      }
+    }
+
     if (!this.opts.wait) {
       this.send();
     }
@@ -346,7 +408,7 @@ class LibCurlRequest {
 
   pipe(writableStream) {
     if (writableStream.write && writableStream.end) {
-      this.pipeTo = writableStream;
+      this.pipeTo.push(writableStream);
     } else {
       throw new TypeError('[request-libcurl] [.pipe()] method accepts only {stream.Writable}');
     }
@@ -354,17 +416,25 @@ class LibCurlRequest {
   }
 
   onData(callback) {
-    this.onData = callback;
+    if (typeof callback === 'function') {
+      this._onData = callback;
+    } else {
+      throw new TypeError('[request-libcurl] [.onData()] method accepts only {Function}');
+    }
     return this;
   }
 
   onHeader(callback) {
-    this.onHeader = callback;
+    if (typeof callback === 'function') {
+      this._onHeader = callback;
+    } else {
+      throw new TypeError('[request-libcurl] [.onHeader()] method accepts only {Function}');
+    }
     return this;
   }
 
   _retry() {
-    this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.uri || this.opts.url);
+    this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
     if (this.opts.retry === true && this.opts.retries > 0) {
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
@@ -376,8 +446,8 @@ class LibCurlRequest {
   }
 
   _sendRequestCallback(error, result) {
-    this._debug('[_sendRequestCallback]', this.opts.uri || this.opts.url);
-    let isRetry    = false;
+    this._debug('[_sendRequestCallback]', this.opts.url);
+    let isRetry = false;
     let statusCode = 408;
 
     if (result && result.statusCode) {
@@ -386,8 +456,10 @@ class LibCurlRequest {
       statusCode = error.statusCode;
     }
 
-    if (error && error.errorCode !== 47) {
-      isRetry = this._retry();
+    if (error) {
+      if (!CURL_ERROR_CODES.includes(error.errorCode)) {
+        isRetry = this._retry();
+      }
     } else if ((this.opts.isBadStatus(statusCode, this.opts.badStatuses)) && this.opts.retry === true && this.opts.retries > 1) {
       isRetry = this._retry();
     }
@@ -404,7 +476,7 @@ class LibCurlRequest {
   }
 
   send() {
-    this._debug('[send]', this.opts.uri || this.opts.url);
+    this._debug('[send]', this.opts.url);
     if (this.sent) {
       return this;
     }
@@ -418,7 +490,7 @@ class LibCurlRequest {
   }
 
   abort() {
-    this._debug('[abort]', this.opts.uri || this.opts.url);
+    this._debug('[abort]', this.opts.url);
     this._stopRequestTimeout();
 
     if (this.retryTimer) {
@@ -440,7 +512,7 @@ function request (opts, cb) {
   return new LibCurlRequest(opts, cb);
 }
 
-request.defaultOptions  = {
+request.defaultOptions = {
   wait: false,
   proxy: false,
   retry: true,

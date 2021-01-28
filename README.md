@@ -20,6 +20,7 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - ㊗️ IDNs support (*internationalized domain names*);
 - 🛡 Repeat (*built-in retries*) request on failed or broken connection;
 - 😎 HTTP/2 support;
+- 🤘 HTTP/3 support!
 - 🎒 Send GET/POST with custom `body` and headers;
 - 🗂 Pipe to the file;
 - 🚦 Follow or deny redirects;
@@ -158,6 +159,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string in a form of `username:password`;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request. If {*String*} is passed `Content-Type` will be set to `application/x-www-form-urlencoded`, by passing plain {*Object*} `Content-Type` will be set to `application/json`. To set custom `Content-Type` — pass it to `opts.headers` *Object*;
 - `opts.upload` {*Integer*} - [Optional] To upload a file pass an *Integer* representing the *file descriptor*. See [this example](https://github.com/VeliovGroup/request-extra#file-upload) for reference;
+- `opts.pipeTo` {*stream.Writable*} - [Optional] Pass response data to *writableStream*, for example download a file to FS via `{pipeTo: fs.createWriteStream('/path/to/file.pdf')}`;
 - `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`. Note: setting custom request headers will replace default ones;
 - `opts.debug` {*Boolean*} - [Optional] Enable debug and extra logging, default: `false`;
 - `opts.retry` {*Boolean*} - [Optional] Retry request if connection is broken? Default: `true`;
@@ -186,44 +188,6 @@ __Notes__:
 - When using `opts.upload` or __any other request where server returns__ `expect: '100-continue'` HTTP header — callback won't return `headers`, to get headers use `onHeader` hook;
 - This package is build on top of [`libcurl`](https://curl.haxx.se/libcurl/) and [`node-libcurl`](https://github.com/JCMais/node-libcurl) it's the way much more powerful than just sending requests via `http` and `https` protocol. Libcurl can work with IMAP/SMTP protocols getting/sending emails. Libcurl can serve as fully-featured FTP-client. Here's full list of supported protocols: `DICT`, `FILE`, `FTP`, `FTPS`, `Gopher`, `HTTP`, `HTTPS`, `IMAP`, `IMAPS`, `LDAP`, `LDAPS`, `POP3`, `POP3S`, `RTMP`, `RTSP`, `SCP`, `SFTP`, `SMTP`, `SMTPS`, `Telnet` and `TFTP`. To learn more on how to utilize all available power and features see docs of [`node-libcurl`](https://github.com/JCMais/node-libcurl#node-libcurl) and [`libcurl`](https://curl.haxx.se/libcurl/) itself.
 
-```js
-let _body    = Buffer.from('');
-let _headers = Buffer.from('');
-const headersObj = {};
-
-const req = request({
-  url: 'https://example.com',
-  retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` hooks
-  rawBody: true,
-  wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` hooks
-}, (error) => {
-  if (error) {
-    throw error;
-  }
-  const body = _body.toString('utf8');
-  const headers = _headers.toString('utf8');
-});
-
-req.onData((chunkAsBuffer) => {
-  // Do something with a body
-  // .pipe() for example
-  _body = Buffer.concat([_body, chunkAsBuffer]);
-});
-
-req.onHeader((chunkAsBuffer) => {
-  _headers = Buffer.concat([_headers, chunkAsBuffer]);
-
-  // or convert it to headers Object:
-  const header = chunkAsBuffer.toString('utf8');
-  if (header.includes(':')) {
-    const splitHeader = header.split(':');
-    headersObj[splitHeader[0].toLowerCase().trim()] = splitHeader[1].trim();
-  }
-});
-
-req.send();
-```
-
 ### Response
 
 - `resp.statusCode` {*Number*} - HTTP response/status code;
@@ -246,6 +210,7 @@ const req     = request({url: 'https://example.com'});
 
 - `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
 - `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or hooks
+- `req.pipe(stream.Writable)` - Pipe response to a *WritableStream*, for example download a file to FS. Use with `{wait: true, retry: false}` options, and `.send()` method
 - `req.onData(callback)` - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and hooks/events
 - `req.onHeader(callback)` - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and hooks/events
 - `callback(error, resp)` - Callback triggered on successful response
@@ -265,13 +230,61 @@ Send GET and POST requests, download and upload files — all just in few lines 
 
 ### GET request
 
+By default `request-libcurl` will take care of chunked responses and encoding:
+
 ```js
 const request = require('request-libcurl');
 
 // GET request:
 request({ url: 'https://example.com' }, (error, resp) => {
+  console.log(resp.body)
   /* ... */
 });
+```
+
+For full control over request/response streams, chunks, and encoding use `{rawBody: true, wait: true, retry: false}` options with `.onData()` and `.onHeader()` hooks:
+
+```js
+let responseBody = Buffer.from('');
+let responseHeaders = Buffer.from('');
+const headersObj = {};
+
+const req = request({
+  url: 'https://example.com',
+  retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` hooks
+  rawBody: true,
+  wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` hooks
+}, (error) => {
+  if (error) {
+    throw error;
+  }
+  // Body as plain-string
+  const body = responseBody.toString('utf8');
+  // All headers as plain multi-line string
+  const headers = responseHeaders.toString('utf8');
+  // All headers as plain-Object
+  console.log(headersObj);
+});
+
+req.onData((chunkAsBuffer) => {
+  // Do something with a body
+  // .pipe() for example
+  responseBody = Buffer.concat([responseBody, chunkAsBuffer]);
+});
+
+req.onHeader((chunkAsBuffer) => {
+  responseHeaders = Buffer.concat([responseHeaders, chunkAsBuffer]);
+
+  // Or convert it to headers Object
+  // Headers received one-by-one, line-by-line
+  const header = chunkAsBuffer.toString('utf8');
+  if (header.includes(':')) {
+    const splitHeader = header.split(':');
+    headersObj[splitHeader[0].toLowerCase().trim()] = splitHeader[1].trim();
+  }
+});
+
+req.send();
 ```
 
 ### POST request
@@ -344,6 +357,34 @@ request({
 
 ### File download
 
+Download a file to the FileSystem by passing {*stream.Writable*}
+
+#### File download using `pipeTo` option
+
+Download a file to the FileSystem by passing {*stream.Writable*} to `pipeTo` option:
+
+```js
+const fs = require('fs');
+const request = require('request-libcurl');
+
+const req = request({
+  url: 'https://example.com/file.pdf',
+  pipeTo: fs.createWriteStream('/path/to/file.pdf', {flags: 'w'}),
+  retry: false // Do not retry when download!
+}, (error, resp) => {
+  if (error) {
+    throw error;
+  } else {
+    // File successfully downloaded
+    fs.stat('/path/to/file.pdf', (error, stats) => {
+      // do something with downloaded file
+    });
+  }
+});
+```
+
+#### File download via `.pipe()` method
+
 Download a file to the FileSystem using `.pipe()` method:
 
 ```js
@@ -352,7 +393,8 @@ const request = require('request-libcurl');
 
 const req = request({
   url: 'https://example.com/file.pdf',
-  wait: true
+  wait: true,
+  retry: false // Do not retry when download!
 }, (error, resp) => {
   if (error) {
     throw error;
@@ -365,6 +407,9 @@ const req = request({
 });
 
 req.pipe(fs.createWriteStream('/path/to/file.pdf', {flags: 'w'}));
+// .pipe() method can be used to pass download to a multiple WritableStream(s):
+// req.pipe(fs.createWriteStream('/backup/downloads/file.pdf', {flags: 'w'}));
+
 req.send();
 ```
 

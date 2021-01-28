@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "index.js",
   "scripts": {
@@ -36,9 +36,9 @@
   "homepage": "https://github.com/VeliovGroup/request-extra#readme",
   "devDependencies": {
     "chai": "^4.2.0",
-    "mocha": "^8.1.1"
+    "mocha": "^8.2.1"
   },
   "dependencies": {
-    "node-libcurl": "^2.2.0"
+    "node-libcurl": "^2.3.0"
   }
 }
