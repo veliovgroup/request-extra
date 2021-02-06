@@ -503,6 +503,39 @@ npm install --save request-libcurl --build-from-source --curl_static_build=true
 # 2. Install globally node-gyp and node-pre-gyp NPM packages, and try again
 ```
 
+### 3. Missing libraries
+
+Some of indirect dependencies of `libcurl` might be missing. Errors related to missing dependencies include `Library not loaded`, and `image not found` in error's description/output.
+
+#### zstd
+
+One of `curl` dependency libraries is [`zstd`](https://github.com/facebook/zstd). See installation instruction below or [build from source](https://github.com/facebook/zstd#build-instructions)
+
+```shell
+# Error: Library not loaded: /usr/local/opt/zstd/lib/libzstd.1.dylib
+# Reason: image not found
+
+# Solution 1: macOS Install via brew
+brew install zstd
+
+# Solution 2: Linux/Debian/Ubuntu Install via apt-get
+apt-get update
+apt-get install zstd
+
+# Solution 3: Linux/CentOS/RHEL Install via yum
+yum install zstd
+
+# Solution 4: Unix build from source
+# Up to date docs — https://github.com/facebook/zstd#build-instructions
+# Download latest release from here — https://github.com/facebook/zstd/releases
+# For example as of 2020-06-02 — zstd-1.4.8.tar.gz
+curl https://github.com/facebook/zstd/releases/download/v1.4.8/zstd-1.4.8.tar.gz -O
+make
+make install # might require sudo/root permissions
+# Optionally test compiled binary with:
+make check
+```
+
 For more details and instructions for different platforms read `node-libcurl` [official docs](https://github.com/JCMais/node-libcurl#important-notes-on-prebuilt-binaries--direct-installation). __Note__: It's highly recommended to [run tests](https://github.com/VeliovGroup/request-extra#running-tests) after building package locally.
 
 ## Running Tests
