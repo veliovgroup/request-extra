@@ -184,11 +184,12 @@ const sendRequest = (libcurl, url, cb) => {
     finished = true;
 
     const headers = {};
-    if (_headers && _headers[0]) {
-      delete _headers[0].result;
-      for (let headerName in _headers[0]) {
-        if (_headers[0][headerName]) {
-          headers[headerName.toLowerCase()] = _headers[0][headerName];
+    const lastHeadersIndex = _headers.length - 1;
+    if (_headers && _headers.length && _headers[lastHeadersIndex]) {
+      delete _headers[lastHeadersIndex].result;
+      for (let headerName in _headers[lastHeadersIndex]) {
+        if (_headers[lastHeadersIndex][headerName]) {
+          headers[headerName.toLowerCase()] = _headers[lastHeadersIndex][headerName];
         }
       }
     }
