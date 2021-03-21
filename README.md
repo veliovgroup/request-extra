@@ -24,30 +24,30 @@ __This is a server-only package.__ This package was created due to a lack of sta
 - 🎒 Send GET/POST with custom `body` and headers;
 - 🗂 Pipe to the file;
 - 🚦 Follow or deny redirects;
-- 📤 [Upload files with a single line](https://github.com/VeliovGroup/request-extra#file-upload);
+- 📤 [Upload files with a single line](https://github.com/veliovgroup/request-extra#file-upload);
 - 🔐 Ignore or deny "broken" SSL/TLS certificates;
 - 💪 Bulletproof design, during development we avoid complex solutions.
 
 ## ToC:
 
-- [Installation](https://github.com/VeliovGroup/request-extra#install)
-- [API](https://github.com/VeliovGroup/request-extra#api)
-- [Request options *detailed* description](https://github.com/VeliovGroup/request-extra#request-options):
-  - [response description (*success*)](https://github.com/VeliovGroup/request-extra#response)
-  - [error description (*fail*)](https://github.com/VeliovGroup/request-extra#error)
-  - [*LibCurlRequest* API](https://github.com/VeliovGroup/request-extra#returns-req-object)
-- [List of default request options](https://github.com/VeliovGroup/request-extra#request-default-options)
-- [Examples](https://github.com/VeliovGroup/request-extra#examples):
-  - [GET](https://github.com/VeliovGroup/request-extra#get-request)
-  - [POST](https://github.com/VeliovGroup/request-extra#post-request)
-  - [POST (*advanced*)](https://github.com/VeliovGroup/request-extra#post-request-with-extra-options)
-  - [File download via `.pipe()`](https://github.com/VeliovGroup/request-extra#file-download)
-  - [File upload](https://github.com/VeliovGroup/request-extra#file-upload)
-  - [File upload (*multipart*)](https://github.com/VeliovGroup/request-extra#file-upload-multipartform-data)
-- [Known Issues](https://github.com/VeliovGroup/request-extra#known-issues)
-- [Running tests](https://github.com/VeliovGroup/request-extra#running-tests)
-  - [Tests](https://github.com/VeliovGroup/request-extra/blob/master/test/npm.js)
-- [Support](https://github.com/VeliovGroup/request-extra#support-our-open-source-contribution)
+- [Installation](https://github.com/veliovgroup/request-extra#install)
+- [API](https://github.com/veliovgroup/request-extra#api)
+- [Request options *detailed* description](https://github.com/veliovgroup/request-extra#request-options):
+  - [response description (*success*)](https://github.com/veliovgroup/request-extra#response)
+  - [error description (*fail*)](https://github.com/veliovgroup/request-extra#error)
+  - [*LibCurlRequest* API](https://github.com/veliovgroup/request-extra#returns-req-object)
+- [List of default request options](https://github.com/veliovgroup/request-extra#request-default-options)
+- [Examples](https://github.com/veliovgroup/request-extra#examples):
+  - [GET](https://github.com/veliovgroup/request-extra#get-request)
+  - [POST](https://github.com/veliovgroup/request-extra#post-request)
+  - [POST (*advanced*)](https://github.com/veliovgroup/request-extra#post-request-with-extra-options)
+  - [File download via `.pipe()`](https://github.com/veliovgroup/request-extra#file-download)
+  - [File upload](https://github.com/veliovgroup/request-extra#file-upload)
+  - [File upload (*multipart*)](https://github.com/veliovgroup/request-extra#file-upload-multipartform-data)
+- [Known Issues](https://github.com/veliovgroup/request-extra#known-issues)
+- [Running tests](https://github.com/veliovgroup/request-extra#running-tests)
+  - [Tests](https://github.com/veliovgroup/request-extra/blob/master/test/npm.js)
+- [Support](https://github.com/veliovgroup/request-extra#support-our-open-source-contribution)
 
 ## Install
 
@@ -158,7 +158,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.method` {*String*} - [Optional] HTTP Method name, you can use any valid method name from HTTP specs, tested with GET/POST, default: `GET`;
 - `opts.auth` {*String*} - [Optional] value for HTTP Authorization header as plain string in a form of `username:password`;
 - `opts.form` {*String*|*Object*} - [Optional] Custom request body for POST request. If {*String*} is passed `Content-Type` will be set to `application/x-www-form-urlencoded`, by passing plain {*Object*} `Content-Type` will be set to `application/json`. To set custom `Content-Type` — pass it to `opts.headers` *Object*;
-- `opts.upload` {*Integer*} - [Optional] To upload a file pass an *Integer* representing the *file descriptor*. See [this example](https://github.com/VeliovGroup/request-extra#file-upload) for reference;
+- `opts.upload` {*Integer*} - [Optional] To upload a file pass an *Integer* representing the *file descriptor*. See [this example](https://github.com/veliovgroup/request-extra#file-upload) for reference;
 - `opts.pipeTo` {*stream.Writable*} - [Optional] Pass response data to *writableStream*, for example download a file to FS via `{pipeTo: fs.createWriteStream('/path/to/file.pdf')}`;
 - `opts.headers` {*Object*} - [Optional] Custom request headers, default: `{ Accept: '*/*', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36' }`. Note: setting custom request headers will replace default ones;
 - `opts.debug` {*Boolean*} - [Optional] Enable debug and extra logging, default: `false`;
@@ -170,7 +170,7 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.keepAlive` {*Boolean*} - [Optional] Turn on TCP keepalive probes, default: `false`;
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
 - `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510]`;
-- `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, [default (*at the bottom of code-block*)](https://github.com/VeliovGroup/request-extra#request-default-options);
+- `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, [default (*at the bottom of code-block*)](https://github.com/veliovgroup/request-extra#request-default-options);
 - `opts.rawBody` {*Boolean*} - Disable all data processing (`body` will be passed as *Buffer*, `headers` will be empty, use `.onHeader()` hook to get headers with `rawBody` option), great option for *piping*, default: `false`;
 - `opts.noStorage` {*Boolean*} - Disable all data processing and data concatenation (`headers` and `body` won't be passed to response), great option for *piping*, default: `false`;
 - `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeader()` and `.onBody()` hooks, default: `false`;
@@ -536,7 +536,7 @@ make install # might require sudo/root permissions
 make check
 ```
 
-For more details and instructions for different platforms read `node-libcurl` [official docs](https://github.com/JCMais/node-libcurl#important-notes-on-prebuilt-binaries--direct-installation). __Note__: It's highly recommended to [run tests](https://github.com/VeliovGroup/request-extra#running-tests) after building package locally.
+For more details and instructions for different platforms read `node-libcurl` [official docs](https://github.com/JCMais/node-libcurl#important-notes-on-prebuilt-binaries--direct-installation). __Note__: It's highly recommended to [run tests](https://github.com/veliovgroup/request-extra#running-tests) after building package locally.
 
 ## Running Tests
 

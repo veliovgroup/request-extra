@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/VeliovGroup/request-extra.git"
+    "url": "git+https://github.com/veliovgroup/request-extra.git"
   },
   "keywords": [
     "request",
@@ -17,6 +17,23 @@
     "repeats",
     "http",
     "http2",
+    "http3",
+    "https",
+    "post",
+    "get",
+    "API",
+    "rest",
+    "request-libcurl",
+    "request-extra"
+  ],
+  "tags": [
+    "request",
+    "libcurl",
+    "curl",
+    "repeats",
+    "http",
+    "http2",
+    "http3",
     "https",
     "post",
     "get",
@@ -31,9 +48,9 @@
   },
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/VeliovGroup/request-extra/issues"
+    "url": "https://github.com/veliovgroup/request-extra/issues"
   },
-  "homepage": "https://github.com/VeliovGroup/request-extra#readme",
+  "homepage": "https://github.com/veliovgroup/request-extra#readme",
   "devDependencies": {
     "chai": "^4.2.0",
     "mocha": "^8.2.1"
