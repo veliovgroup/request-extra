@@ -184,6 +184,9 @@ const sendRequest = (libcurl, url, cb) => {
     finished = true;
 
     const headers = {};
+    // GET REPONSE HEADERS
+    // IF REDIRECT IS IN PLACE AND FOLLOWED -
+    // READ HEADERS ONLY FROM THE LATEST REQUEST
     const lastHeadersIndex = _headers.length - 1;
     if (_headers && _headers.length && _headers[lastHeadersIndex]) {
       delete _headers[lastHeadersIndex].result;
@@ -191,6 +194,15 @@ const sendRequest = (libcurl, url, cb) => {
         if (_headers[lastHeadersIndex][headerName]) {
           headers[headerName.toLowerCase()] = _headers[lastHeadersIndex][headerName];
         }
+      }
+    }
+
+    // IF REDIRECT ARE FOLLOWED GET LAST `Location` HEADER
+    // AND ADD IT TO THE FINAL `headers` OBJECT
+    // UNLESS `.location` ALREADY EXISTS IN THE RESPONSE HEADERS' OBJECT
+    if (!headers.location && lastHeadersIndex > 0 && _headers[_headers.length - 2]) {
+      if (_headers[_headers.length - 2].Location || _headers[_headers.length - 2].location) {
+        headers.location = _headers[_headers.length - 2].Location || _headers[_headers.length - 2].location;
       }
     }
 
