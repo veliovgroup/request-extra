@@ -294,6 +294,7 @@ const sendRequest = (libcurl, url, cb) => {
   }
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
+    let hasCurlOptionError = false;
     for (let option in opts.curlOptions) {
       if (Curl.option[option] !== undefined) {
         try {
@@ -303,11 +304,14 @@ const sendRequest = (libcurl, url, cb) => {
           curlOptionError.status = 500;
           curlOptionError.errorCode = 4;
           curlOptionError.statusCode = 500;
-
+          hasCurlOptionError = true;
           cb(curlOptionError);
           break;
         }
       }
+    }
+    if (hasCurlOptionError) {
+      return;
     }
   }
 
