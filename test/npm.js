@@ -1028,7 +1028,7 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
+        assert.equal(resp.headers.location, 'https://yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
@@ -1057,7 +1057,7 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'http://www.yandex.ru/', 'Correct "location" header is presented');
+        assert.equal(resp.headers.location, 'https://yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
@@ -1324,7 +1324,8 @@ describe('LibCurlRequest', function () {
   describe('HTTPS/HANDLE ERRORS', () => {
     it('GET/HTTPS/ERROR/EXPIRED [no reject]', (done) => {
       request({
-        url: 'https://expired.badssl.com/'
+        url: 'https://expired.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1352,7 +1353,8 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/ERROR/WRONG HOST [no reject]', (done) => {
       request({
-        url: 'https://wrong.host.badssl.com/'
+        url: 'https://wrong.host.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1380,7 +1382,8 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/ERROR/SELF-SIGNED [no reject]', (done) => {
       request({
-        url: 'https://self-signed.badssl.com/'
+        url: 'https://self-signed.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1408,7 +1411,8 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/ERROR/UNTRUSTED-ROOT [no reject]', (done) => {
       request({
-        url: 'https://untrusted-root.badssl.com/'
+        url: 'https://untrusted-root.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1436,7 +1440,8 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/ERROR/REVOKED [no reject]', (done) => {
       request({
-        url: 'https://revoked.badssl.com/'
+        url: 'https://revoked.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1471,7 +1476,8 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/ERROR/PINNING [no reject]', (done) => {
       request({
-        url: 'https://pinning-test.badssl.com/'
+        url: 'https://pinning-test.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1507,7 +1513,8 @@ describe('LibCurlRequest', function () {
 
     it('GET/HTTPS/ERROR/no-common-name [no reject]', (done) => {
       request({
-        url: 'https://no-common-name.badssl.com/'
+        url: 'https://no-common-name.badssl.com/',
+        rejectUnauthorized: false
       }, (error, resp) => {
         assert.isUndefined(error, 'no error');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
@@ -1520,11 +1527,7 @@ describe('LibCurlRequest', function () {
     it('GET/HTTPS/ERROR/no-common-name [reject]', (done) => {
       request({
         url: 'https://no-common-name.badssl.com/',
-        rejectUnauthorized: true,
-        curlOptions: {
-          SSL_VERIFYHOST: 1, // Check host name in the SSL certificate
-          SSL_VERIFYSTATUS: 1, // Check certificate status via OCSP
-        }
+        rejectUnauthorized: true
       }, (error, resp) => {
         if (error && error.statusCode === 500) {
           console.log('VERIFYHOST ERROR:', error.message);
@@ -1532,9 +1535,9 @@ describe('LibCurlRequest', function () {
           assert.isUndefined(resp, 'no response');
           assert.equal(error.statusCode, 526, 'statusCode: 526');
           assert.equal(error.status, 526, 'status: 526');
-          assert.equal(error.errorCode, 91, 'status: 91');
-          assert.equal(error.code, 91, 'code: 91');
-          assert.equal(error.message, 'Error: SSL server certificate status verification FAILED', 'error message is presented');
+          assert.equal(error.errorCode, 60, 'status: 60');
+          assert.equal(error.code, 60, 'code: 60');
+          assert.equal(error.message, 'Error: SSL peer certificate or SSH remote key was not OK', 'error message is presented');
         }
         done();
       });
