@@ -323,6 +323,7 @@ const sendRequest = (libcurl, url, cb) => {
         }
       }
     }
+
     if (hasCurlOptionError) {
       return;
     }
@@ -550,7 +551,7 @@ request.defaultOptions = {
     return badStatuses.includes(statusCode) || statusCode >= 500;
   },
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.41 Safari/537.36',
     Accept: '*/*'
   }
 };
