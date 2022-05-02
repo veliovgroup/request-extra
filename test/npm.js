@@ -733,7 +733,7 @@ describe('LibCurlRequest', function () {
           assert.equal(resp.statusCode, 200, 'statusCode: 200');
           assert.equal(resp.status, 200, 'status: 200');
           assert.isObject(resp.headers, 'Headers Object is presented');
-          assert.equal(resp.headers.location, 'http://httpbin.org/absolute-redirect/3', 'Correct Location header');
+          assert.equal(resp.headers.location, 'http://httpbin.org/get', 'Correct Location header');
         }
         done();
       });
@@ -752,7 +752,7 @@ describe('LibCurlRequest', function () {
           assert.equal(resp.statusCode, 200, 'statusCode: 200');
           assert.equal(resp.status, 200, 'status: 200');
           assert.isObject(resp.headers, 'Headers Object is presented');
-          assert.equal(resp.headers.location, 'http://httpbin.org/absolute-redirect/3', 'Correct Location header');
+          assert.equal(resp.headers.location, 'http://httpbin.org/get', 'Correct Location header');
         }
         done();
       });
@@ -1028,7 +1028,6 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'https://yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
@@ -1057,7 +1056,6 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isOk(resp.headers['content-type'].includes('text/html'), 'Correct "content-type" header is presented');
-        assert.equal(resp.headers.location, 'https://yandex.ru/', 'Correct "location" header is presented');
         done();
       });
     });
