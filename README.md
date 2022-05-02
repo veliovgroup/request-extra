@@ -10,7 +10,7 @@
 npm install --save request-libcurl
 ```
 
-__This is a server-only package.__ This package was created due to a lack of stability in the Node's `http`/`https` *ClientRequest* modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`, later core library might be changed, but we would keep same API and idea about fast, sustainable and simple HTTP requests.
+__This is a server-only package.__ This package was created due to a lack of stability in the Node's `http`/`https` *ClientRequest* and simplicity in `fetch` modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`, later core library might be changed, but we would keep same API and idea about fast, sustainable and simple HTTP requests.
 
 ## Main features
 
@@ -171,9 +171,9 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 - `opts.maxRedirects` {*Number*} - [Optional] How many redirects are supported during single request, default: `4`;
 - `opts.badStatuses` {*[Number]*} - [Optional] Array of "bad" status codes responsible for triggering request retries, default: `[300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510]`;
 - `opts.isBadStatus` {*Function*} - [Optional] Function responsible for triggering request retries, [default (*at the bottom of code-block*)](https://github.com/veliovgroup/request-extra#request-default-options);
-- `opts.rawBody` {*Boolean*} - Disable all data processing (`body` will be passed as *Buffer*, `headers` will be empty, use `.onHeader()` hook to get headers with `rawBody` option), great option for *piping*, default: `false`;
+- `opts.rawBody` {*Boolean*} - Disable all data processing (`body` will be passed as *Buffer*, `headers` will be empty, use `.onHeader()` callback to get headers with `rawBody` option), great option for *piping*, default: `false`;
 - `opts.noStorage` {*Boolean*} - Disable all data processing and data concatenation (`headers` and `body` won't be passed to response), great option for *piping*, default: `false`;
-- `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeader()` and `.onBody()` hooks, default: `false`;
+- `opts.wait` {*Boolean*} - Do not send request immediately and wait until `.send()` method is called, set this option to `true` to register `.onHeader()` and `.onBody()` callbacks, default: `false`;
 - `opts.proxy` {*String*} - Fully qualified URL to HTTP proxy, when this feature is enabled connections are going to start with `CONNECT` request, default: no proxy or system proxy is used;
 - `opts.rejectUnauthorized` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate can't be validated? Default: `false`;
 - `opts.rejectUnauthorizedProxy` {*Boolean*} - [Optional] Shall request be rejected if SSL/TLS certificate of a __proxy host__ can't be validated? Default: `false`;
@@ -182,10 +182,10 @@ request.defaultOptions.isBadStatus = (statusCode, badStatuses = request.defaultO
 
 __Notes__:
 
-- When using `opts.rawBody` callback won't return `headers`, to get headers use `onHeader` hook;
-- When using `opts.noStorage` callback won't return `headers` and `body`, to get headers and body use `onData` and `onHeader` hooks;
-- `opts.upload` and `opts.form` __can not be used together__, there won't be exception thrown, if both presented — `opts.form` will be used;
-- When using `opts.upload` or __any other request where server returns__ `expect: '100-continue'` HTTP header — callback won't return `headers`, to get headers use `onHeader` hook;
+- When using `opts.rawBody` callback won't return `headers`, to get headers use `onHeader` callback;
+- When using `opts.noStorage` callback won't return `headers` and `body`, to get headers and body use `onData` and `onHeader` callbacks;
+- `opts.upload` and `opts.form` __can not be used together__, there won't be exception thrown, if both presented — `opts.form` will be used instead;
+- When using `opts.upload` or __any other request where server returns__ `expect: '100-continue'` HTTP header — callback won't return `headers`, to get headers use `onHeader` callback;
 - This package is build on top of [`libcurl`](https://curl.haxx.se/libcurl/) and [`node-libcurl`](https://github.com/JCMais/node-libcurl) it's the way much more powerful than just sending requests via `http` and `https` protocol. Libcurl can work with IMAP/SMTP protocols getting/sending emails. Libcurl can serve as fully-featured FTP-client. Here's full list of supported protocols: `DICT`, `FILE`, `FTP`, `FTPS`, `Gopher`, `HTTP`, `HTTPS`, `IMAP`, `IMAPS`, `LDAP`, `LDAPS`, `POP3`, `POP3S`, `RTMP`, `RTSP`, `SCP`, `SFTP`, `SMTP`, `SMTPS`, `Telnet` and `TFTP`. To learn more on how to utilize all available power and features see docs of [`node-libcurl`](https://github.com/JCMais/node-libcurl#node-libcurl) and [`libcurl`](https://curl.haxx.se/libcurl/) itself.
 
 ### Response
@@ -209,10 +209,10 @@ const req     = request({url: 'https://example.com'});
 ```
 
 - `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
-- `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or hooks
+- `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
 - `req.pipe(stream.Writable)` - Pipe response to a *WritableStream*, for example download a file to FS. Use with `{wait: true, retry: false}` options, and `.send()` method
-- `req.onData(callback)` - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and hooks/events
-- `req.onHeader(callback)` - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and hooks/events
+- `req.onData(callback)` - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
+- `req.onHeader(callback)` - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
 - `callback(error, resp)` - Callback triggered on successful response
   - `error` {*undefined*};
   - `resp.statusCode` {*Number*} - HTTP status code;
@@ -242,7 +242,7 @@ request({ url: 'https://example.com' }, (error, resp) => {
 });
 ```
 
-For full control over request/response streams, chunks, and encoding use `{rawBody: true, wait: true, retry: false}` options with `.onData()` and `.onHeader()` hooks:
+For full control over request/response streams, chunks, and encoding use `{rawBody: true, wait: true, retry: false}` options with `.onData()` and `.onHeader()` callbacks:
 
 ```js
 let responseBody = Buffer.from('');
@@ -251,9 +251,9 @@ const headersObj = {};
 
 const req = request({
   url: 'https://example.com',
-  retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` hooks
+  retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` callbacks
   rawBody: true,
-  wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` hooks
+  wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` callbacks
 }, (error) => {
   if (error) {
     throw error;
