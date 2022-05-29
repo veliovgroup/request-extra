@@ -165,13 +165,23 @@ const sendRequest = (libcurl, url, cb) => {
 
   if ((libcurl.pipeTo && libcurl.pipeTo.length) || libcurl._onData) {
     curl.on('data', (data) => {
+      if (!data) {
+        return;
+      }
+
       if (libcurl._onData) {
         libcurl._onData(data);
       }
 
       if (libcurl.pipeTo && libcurl.pipeTo.length) {
         for (const writableStream of libcurl.pipeTo) {
-          writableStream.write(data);
+          if (!writableStream.destroyed) {
+            try {
+              writableStream.write(data);
+            } catch (writableStreamError) {
+              libcurl._debug('writableStream.write(data) throw an exception', writableStreamError);
+            }
+          }
         }
       }
     });
@@ -219,7 +229,14 @@ const sendRequest = (libcurl, url, cb) => {
         }
       };
       for (const writableStream of libcurl.pipeTo) {
-        writableStream.end(onStreamEnd);
+        libcurl._debug({'writableStream.destroyed': writableStream.destroyed});
+        if (!writableStream.destroyed) {
+          try {
+            writableStream.end('', 'utf8', onStreamEnd);
+          } catch (writableStreamError) {
+            libcurl._debug('writableStream.end(\'\', \'urf8\', onStreamEnd) throw an exception', writableStreamError);
+          }
+        }
       }
     } else {
       finish();
@@ -252,7 +269,11 @@ const sendRequest = (libcurl, url, cb) => {
     if (libcurl.pipeTo && libcurl.pipeTo.length) {
       for (const writableStream of libcurl.pipeTo) {
         if (!writableStream.destroyed) {
-          writableStream.destroy(error);
+          try {
+            writableStream.destroy(error);
+          } catch (writableStreamError) {
+            libcurl._debug('writableStream.destroy(error) throw an exception', writableStreamError);
+          }
         }
 
         if (writableStream.path && typeof writableStream.path === 'string') {
@@ -307,7 +328,6 @@ const sendRequest = (libcurl, url, cb) => {
   }
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
-    let hasCurlOptionError = false;
     for (let option in opts.curlOptions) {
       if (Curl.option[option] !== undefined) {
         try {
@@ -317,25 +337,27 @@ const sendRequest = (libcurl, url, cb) => {
           curlOptionError.status = 500;
           curlOptionError.errorCode = 4;
           curlOptionError.statusCode = 500;
-          hasCurlOptionError = true;
-          cb(curlOptionError);
-          break;
+          _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, opts.curlOptions[option], {curlOptions: opts.curlOptions });
         }
       }
-    }
-
-    if (hasCurlOptionError) {
-      return;
     }
   }
 
   if (opts.curlFeatures && typeof opts.curlFeatures === 'object') {
     for (let option in opts.curlFeatures) {
       if (CurlFeature[option] !== undefined) {
-        if (opts.curlFeatures[option] === true) {
-          curl.enable(CurlFeature[option]);
-        } else if (opts.curlFeatures[option] === false) {
-          curl.disable(CurlFeature[option]);
+        try {
+          if (opts.curlFeatures[option] === true) {
+            curl.enable(CurlFeature[option]);
+          } else if (opts.curlFeatures[option] === false) {
+            curl.disable(CurlFeature[option]);
+          }
+        } catch (curlFeatureError) {
+          curlFeatureError.code = 4;
+          curlFeatureError.status = 500;
+          curlFeatureError.errorCode = 4;
+          curlFeatureError.statusCode = 500;
+          _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, opts.curlFeatures[option], {curlFeatures: opts.curlFeatures });
         }
       }
     }
@@ -478,7 +500,7 @@ class LibCurlRequest {
       if (!CURL_ERROR_CODES.includes(error.errorCode)) {
         isRetry = this._retry();
       }
-    } else if ((this.opts.isBadStatus(statusCode, this.opts.badStatuses)) && this.opts.retry === true && this.opts.retries > 1) {
+    } else if (this.opts.isBadStatus(statusCode, this.opts.badStatuses) && this.opts.retry === true && this.opts.retries > 1) {
       isRetry = this._retry();
     }
 

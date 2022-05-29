@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "index.js",
   "scripts": {
