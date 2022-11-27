@@ -134,7 +134,7 @@ const sendRequest = (libcurl, url, cb) => {
 
   let lcHeader = '';
   for (let header in opts.headers) {
-    if (opts.headers[header]) {
+    if (typeof header === 'string') {
       lcHeader = header.toLowerCase();
       if (lcHeader === 'content-type') {
         hasContentType = true;
@@ -143,7 +143,13 @@ const sendRequest = (libcurl, url, cb) => {
       } else if (lcHeader === 'accept-encoding') {
         hasAcceptEncoding = opts.headers[header];
       }
-      customHeaders.push(`${header}: ${opts.headers[header]}`);
+      if (opts.headers[header] === void 0 || opts.headers[header] === null || opts.headers[header] === false) {
+        // UNSET DEFAULT HEADERS
+        customHeaders.push(`${header}: `);
+      } else {
+        // SET CUSTOM HEADERS
+        customHeaders.push(`${header}: ${opts.headers[header]}`);
+      }
     }
   }
 
@@ -317,8 +323,8 @@ const sendRequest = (libcurl, url, cb) => {
       }
     }
 
-    if (!hasContentLength) {
-      customHeaders.push(`Content-Length: ${Buffer.byteLength(opts.form)}`);
+    if (!hasContentLength && typeof opts.form === 'string') {
+      customHeaders.push(`Content-Length: ${Buffer.byteLength(Buffer.from(opts.form))}`);
     }
 
     curl.setOpt(Curl.option.POSTFIELDS, opts.form);
@@ -390,7 +396,7 @@ class LibCurlRequest {
     this.retryTimer = false;
     this.timeoutTimer = null;
 
-    this.opts = Object.assign({}, request.defaultOptions, opts);
+    this.opts = { ...request.defaultOptions, ...opts, headers: { ...request.defaultOptions.headers, ...opts.headers }};
     this.opts.method = this.opts.method.toUpperCase();
 
     if (this.opts.debug) {

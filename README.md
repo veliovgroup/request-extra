@@ -52,8 +52,11 @@ __This is a server-only package.__ This package was created due to a lack of sta
 ## Install
 
 ```shell
-# ONLY for node@>=8.9.0
+# ONLY for node@^14.14 || >=16
 npm install request-libcurl --save
+
+# for node@>=9.0.0
+npm install request-libcurl@2.3.4 --save
 ```
 
 ```js

@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "2.3.4",
+  "version": "3.0.0",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "index.js",
   "scripts": {
@@ -44,7 +44,7 @@
   ],
   "author": "dr.dimitru (https://veliovgroup.com)",
   "engines": {
-    "node": ">=9.0.0"
+    "node": "^14.14 || >=16"
   },
   "license": "BSD-3-Clause",
   "bugs": {
@@ -52,10 +52,10 @@
   },
   "homepage": "https://github.com/veliovgroup/request-extra#readme",
   "devDependencies": {
-    "chai": "^4.3.6",
-    "mocha": "^10.0.0"
+    "chai": "^4.3.7",
+    "mocha": "^10.1.0"
   },
   "dependencies": {
-    "node-libcurl": "^2.3.4"
+    "node-libcurl": "^3.0.0"
   }
 }
