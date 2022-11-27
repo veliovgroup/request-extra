@@ -1,7 +1,6 @@
 ### I'm having an issue:
   - Give an expressive description of what is went wrong
   - Version of `request-extra` you're experiencing this issue
-  - Is it NPM or Meteor (Atmosphere) package version?
   - Version of `Node.js`, `NPM` and `MongoDB` you're experiencing this issue
   - If you're getting an error (exception), please provide full error log (output in console) as file or screenshot
 
