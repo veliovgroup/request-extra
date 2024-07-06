@@ -1,9 +1,15 @@
 {
   "name": "request-libcurl",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "index.js",
+  "type": "module",
+  "exports": {
+    "import": "./index.js",
+    "require": "./index.cjs"
+  },
   "scripts": {
+    "prepublishOnly": "rollup --config rollup.config.js",
     "test": "mocha ./test/npm.js"
   },
   "repository": {
@@ -44,7 +50,7 @@
   ],
   "author": "dr.dimitru (https://veliovgroup.com)",
   "engines": {
-    "node": "^14.14 || >=16"
+    "node": ">=16.14"
   },
   "license": "BSD-3-Clause",
   "bugs": {
@@ -52,10 +58,10 @@
   },
   "homepage": "https://github.com/veliovgroup/request-extra#readme",
   "devDependencies": {
-    "chai": "^4.3.7",
-    "mocha": "^10.1.0"
+    "chai": "^5.1.1",
+    "mocha": "^10.6.0"
   },
   "dependencies": {
-    "node-libcurl": "^3.0.0"
+    "node-libcurl": "^4.0.0"
   }
 }

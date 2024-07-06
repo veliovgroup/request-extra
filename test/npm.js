@@ -1,11 +1,11 @@
-const fs      = require('fs');
-const http    = require('http');
-const path    = require('path');
-const request = require('../index.js');
-const querystring = require('querystring');
+import fs from 'fs';
+import http from 'http';
+import path from 'path';
+import request from '../index.js';
+import querystring from 'querystring';
 
-const { assert }       = require('chai');
-const { it, describe } = require('mocha');
+import { assert } from 'chai';
+import { it, describe } from 'mocha';
 
 const PORT = parseInt(process.env.PORT || 3003);
 const DEBUG = (process.env.DEBUG === 'true') ? true : false;
@@ -55,7 +55,7 @@ const server = http.createServer(function (req, res) {
       } else if (req.url.endsWith('no-response-timeout')) {
         req.setTimeout(1024);
       } else if (req.url.endsWith('destroy')) {
-        req.destroy(400);
+        req.destroy();
       } else {
         res.writeHead(204);
         res.end();

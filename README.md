@@ -52,19 +52,22 @@ __This is a server-only package.__ This package was created due to a lack of sta
 ## Install
 
 ```shell
-# ONLY for node@^14.14 || >=16
+# ONLY for node@^16.14
 npm install request-libcurl --save
+
+# ONLY for node@^14.14 || >=16 || <16.14
+npm install request-libcurl@3.0.0 --save
 
 # for node@>=9.0.0
 npm install request-libcurl@2.3.4 --save
 ```
 
 ```js
+//Import
+import request from 'request-libcurl';
+
 // CommonJS
 const request = require('request-libcurl');
-
-//ES6 Style:
-import request from 'request-libcurl';
 ```
 
 ## Note
@@ -74,7 +77,7 @@ We build this package to serve our needs and solve our issues with Node's native
 ## API
 
 ```js
-const request = require('request-libcurl');
+import request from 'request-libcurl';
 
 const opts = {
   method: 'GET', // POST, GET
@@ -111,7 +114,7 @@ request(opts, (error, resp) => {
 ### Request default options
 
 ```js
-const request = require('request-libcurl');
+import request from 'request-libcurl';
 
 // Default "defaultOptions" Object:
 request.defaultOptions = {
@@ -207,8 +210,8 @@ __Notes__:
 ### Returns `req` *Object*
 
 ```js
-const request = require('request-libcurl');
-const req     = request({url: 'https://example.com'});
+import request from 'request-libcurl';
+const req = request({ url: 'https://example.com' });
 ```
 
 - `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
@@ -236,7 +239,7 @@ Send GET and POST requests, download and upload files — all just in few lines 
 By default `request-libcurl` will take care of chunked responses and encoding:
 
 ```js
-const request = require('request-libcurl');
+import request from 'request-libcurl';
 
 // GET request:
 request({ url: 'https://example.com' }, (error, resp) => {
@@ -293,8 +296,8 @@ req.send();
 ### POST request
 
 ```js
-const request = require('request-libcurl');
-const querystring = require('querystring');
+import request from 'request-libcurl';
+import querystring from 'querystring';
 
 // POST (Content-Type: application/x-www-form-urlencoded):
 // by passing a String or formatted "Query String" to `form`
@@ -331,7 +334,7 @@ request({
 ### POST request with extra options
 
 ```js
-const request = require('request-libcurl');
+import request from 'request-libcurl';
 
 // POST with Authorization (Content-Type: application/json):
 // by passing plain Object to `form`
@@ -367,8 +370,8 @@ Download a file to the FileSystem by passing {*stream.Writable*}
 Download a file to the FileSystem by passing {*stream.Writable*} to `pipeTo` option:
 
 ```js
-const fs = require('fs');
-const request = require('request-libcurl');
+import fs from 'fs';
+import request from 'request-libcurl';
 
 const req = request({
   url: 'https://example.com/file.pdf',
@@ -391,8 +394,8 @@ const req = request({
 Download a file to the FileSystem using `.pipe()` method:
 
 ```js
-const fs = require('fs');
-const request = require('request-libcurl');
+import fs from 'fs';
+import request from 'request-libcurl';
 
 const req = request({
   url: 'https://example.com/file.pdf',
@@ -419,8 +422,8 @@ req.send();
 ### File upload
 
 ```js
-const fs = require('fs');
-const request = require('request-libcurl');
+import fs from 'fs';
+import request from 'request-libcurl';
 
 fs.open('/path/to/a/file', 'r', function(err, fd) {
   if (err) {
@@ -447,7 +450,7 @@ fs.open('/path/to/a/file', 'r', function(err, fd) {
 In this example we are going to use [`HTTPPOST` libcurl option](https://curl.haxx.se/libcurl/c/CURLOPT_HTTPPOST.html) passing `[Object]` (*array of Objects* representing files, note: multiple files can be passed in a single request) via `curlOptions`
 
 ```js
-const request = require('request-libcurl');
+import request from 'request-libcurl';
 const fileLocation = '/full/absolute/path/to/a/file.ext';
 
 request({

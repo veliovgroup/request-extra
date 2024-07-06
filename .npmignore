@@ -6,5 +6,6 @@
 .npm
 node_modules
 npm-debug.log*
+rollup.config.js
 test/
 test/*

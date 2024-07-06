@@ -1,6 +1,9 @@
-import fs from 'fs';
-import { URL } from 'url';
-import { Curl, CurlFeature } from 'node-libcurl';
+'use strict';
+
+const fs = require('fs');
+const url = require('url');
+const nodeLibcurl = require('node-libcurl');
+
 const SSL_ERROR_CODES = [58, 60, 83, 90, 91];
 const CURL_ERROR_CODES = [3, 4, 47];
 
@@ -50,7 +53,7 @@ const sendRequest = (libcurl, url, cb) => {
   closeCurl(libcurl.curl);
 
   const opts = libcurl.opts;
-  const curl = new Curl();
+  const curl = new nodeLibcurl.Curl();
   let finished = false;
   let timeoutTimer = null;
   let isJsonUpload = false;
@@ -70,58 +73,58 @@ const sendRequest = (libcurl, url, cb) => {
   }, opts.timeout + 1000);
 
   if (opts.rawBody) {
-    curl.enable(CurlFeature.Raw);
+    curl.enable(nodeLibcurl.CurlFeature.Raw);
   }
 
   if (opts.noStorage) {
-    curl.enable(CurlFeature.NoStorage);
+    curl.enable(nodeLibcurl.CurlFeature.NoStorage);
   }
 
-  curl.setOpt(Curl.option.URL, url.href);
-  curl.setOpt(Curl.option.VERBOSE, opts.debug);
+  curl.setOpt(nodeLibcurl.Curl.option.URL, url.href);
+  curl.setOpt(nodeLibcurl.Curl.option.VERBOSE, opts.debug);
 
   if (opts.proxy && typeof opts.proxy === 'string') {
-    curl.setOpt(Curl.option.PROXY, opts.proxy);
+    curl.setOpt(nodeLibcurl.Curl.option.PROXY, opts.proxy);
   } else if (opts.proxy === true) {
-    curl.setOpt(Curl.option.PROXY, url.origin);
+    curl.setOpt(nodeLibcurl.Curl.option.PROXY, url.origin);
   }
 
-  if (Curl.option.NOPROGRESS !== undefined) {
-    curl.setOpt(Curl.option.NOPROGRESS, true);
+  if (nodeLibcurl.Curl.option.NOPROGRESS !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.NOPROGRESS, true);
   }
-  if (Curl.option.TIMEOUT_MS !== undefined) {
-    curl.setOpt(Curl.option.TIMEOUT_MS, opts.timeout);
+  if (nodeLibcurl.Curl.option.TIMEOUT_MS !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.TIMEOUT_MS, opts.timeout);
   }
-  if (Curl.option.MAXREDIRS !== undefined) {
-    curl.setOpt(Curl.option.MAXREDIRS, opts.maxRedirects);
+  if (nodeLibcurl.Curl.option.MAXREDIRS !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.MAXREDIRS, opts.maxRedirects);
   }
-  if (Curl.option.CUSTOMREQUEST !== undefined) {
-    curl.setOpt(Curl.option.CUSTOMREQUEST, opts.method);
+  if (nodeLibcurl.Curl.option.CUSTOMREQUEST !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.CUSTOMREQUEST, opts.method);
   }
-  if (Curl.option.FOLLOWLOCATION !== undefined) {
-    curl.setOpt(Curl.option.FOLLOWLOCATION, opts.followRedirect);
+  if (nodeLibcurl.Curl.option.FOLLOWLOCATION !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.FOLLOWLOCATION, opts.followRedirect);
   }
-  if (Curl.option.SSL_VERIFYPEER !== undefined) {
-    curl.setOpt(Curl.option.SSL_VERIFYPEER, opts.rejectUnauthorized ? 1 : 0);
+  if (nodeLibcurl.Curl.option.SSL_VERIFYPEER !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.SSL_VERIFYPEER, opts.rejectUnauthorized ? 1 : 0);
   }
-  if (Curl.option.PROXY_SSL_VERIFYPEER !== undefined) {
-    curl.setOpt(Curl.option.PROXY_SSL_VERIFYPEER, opts.rejectUnauthorizedProxy ? 1 : 0);
+  if (nodeLibcurl.Curl.option.PROXY_SSL_VERIFYPEER !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.PROXY_SSL_VERIFYPEER, opts.rejectUnauthorizedProxy ? 1 : 0);
   }
-  if (Curl.option.SSL_VERIFYHOST !== undefined) {
-    curl.setOpt(Curl.option.SSL_VERIFYHOST, opts.rejectUnauthorized ? 2 : 0);
+  if (nodeLibcurl.Curl.option.SSL_VERIFYHOST !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.SSL_VERIFYHOST, opts.rejectUnauthorized ? 2 : 0);
   }
-  if (Curl.option.PROXY_SSL_VERIFYHOST !== undefined) {
-    curl.setOpt(Curl.option.PROXY_SSL_VERIFYHOST, opts.rejectUnauthorizedProxy ? 2 : 0);
+  if (nodeLibcurl.Curl.option.PROXY_SSL_VERIFYHOST !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.PROXY_SSL_VERIFYHOST, opts.rejectUnauthorizedProxy ? 2 : 0);
   }
-  if (Curl.option.CONNECTTIMEOUT_MS !== undefined) {
-    curl.setOpt(Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
+  if (nodeLibcurl.Curl.option.CONNECTTIMEOUT_MS !== undefined) {
+    curl.setOpt(nodeLibcurl.Curl.option.CONNECTTIMEOUT_MS, opts.timeout);
   }
 
-  if (Curl.option.TCP_KEEPALIVE !== undefined) {
+  if (nodeLibcurl.Curl.option.TCP_KEEPALIVE !== undefined) {
     if (opts.keepAlive === true) {
-      curl.setOpt(Curl.option.TCP_KEEPALIVE, 1);
+      curl.setOpt(nodeLibcurl.Curl.option.TCP_KEEPALIVE, 1);
     } else {
-      curl.setOpt(Curl.option.TCP_KEEPALIVE, 0);
+      curl.setOpt(nodeLibcurl.Curl.option.TCP_KEEPALIVE, 0);
     }
   }
 
@@ -151,11 +154,11 @@ const sendRequest = (libcurl, url, cb) => {
     }
   }
 
-  if (Curl.option.ACCEPT_ENCODING !== undefined) {
+  if (nodeLibcurl.Curl.option.ACCEPT_ENCODING !== undefined) {
     if (!hasAcceptEncoding) {
-      curl.setOpt(Curl.option.ACCEPT_ENCODING, '');
+      curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, '');
     } else {
-      curl.setOpt(Curl.option.ACCEPT_ENCODING, hasAcceptEncoding);
+      curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, hasAcceptEncoding);
     }
   }
 
@@ -324,17 +327,17 @@ const sendRequest = (libcurl, url, cb) => {
       customHeaders.push(`Content-Length: ${Buffer.byteLength(Buffer.from(opts.form))}`);
     }
 
-    curl.setOpt(Curl.option.POSTFIELDS, opts.form);
+    curl.setOpt(nodeLibcurl.Curl.option.POSTFIELDS, opts.form);
   } else if (opts.upload) {
-    curl.setOpt(Curl.option.UPLOAD, true);
-    curl.setOpt(Curl.option.READDATA, opts.upload);
+    curl.setOpt(nodeLibcurl.Curl.option.UPLOAD, true);
+    curl.setOpt(nodeLibcurl.Curl.option.READDATA, opts.upload);
   }
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
     for (let option in opts.curlOptions) {
-      if (Curl.option[option] !== undefined) {
+      if (nodeLibcurl.Curl.option[option] !== undefined) {
         try {
-          curl.setOpt(Curl.option[option], opts.curlOptions[option]);
+          curl.setOpt(nodeLibcurl.Curl.option[option], opts.curlOptions[option]);
         } catch (curlOptionError) {
           curlOptionError.code = 4;
           curlOptionError.status = 500;
@@ -348,12 +351,12 @@ const sendRequest = (libcurl, url, cb) => {
 
   if (opts.curlFeatures && typeof opts.curlFeatures === 'object') {
     for (let option in opts.curlFeatures) {
-      if (CurlFeature[option] !== undefined) {
+      if (nodeLibcurl.CurlFeature[option] !== undefined) {
         try {
           if (opts.curlFeatures[option] === true) {
-            curl.enable(CurlFeature[option]);
+            curl.enable(nodeLibcurl.CurlFeature[option]);
           } else if (opts.curlFeatures[option] === false) {
-            curl.disable(CurlFeature[option]);
+            curl.disable(nodeLibcurl.CurlFeature[option]);
           }
         } catch (curlFeatureError) {
           curlFeatureError.code = 4;
@@ -366,7 +369,7 @@ const sendRequest = (libcurl, url, cb) => {
     }
   }
 
-  curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
+  curl.setOpt(nodeLibcurl.Curl.option.HTTPHEADER, customHeaders);
 
   process.nextTick(() => {
     if (!libcurl.finished) {
@@ -420,7 +423,7 @@ class LibCurlRequest {
       isBadUrl = true;
     } else {
       try {
-        this.url = new URL(this.opts.url);
+        this.url = new url.URL(this.opts.url);
       } catch (urlError) {
         this._debug('REQUEST: `new URL()` ERROR:', opts, urlError);
         isBadUrl = true;
@@ -581,4 +584,4 @@ request.defaultOptions = {
   }
 };
 
-export default request;
+module.exports = request;
