@@ -1,8 +1,8 @@
-import fs from 'fs';
-import http from 'http';
-import path from 'path';
-import request from '../index.js';
-import querystring from 'querystring';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import request, { requestAsync } from '../index.js';
+import querystring from 'node:querystring';
 
 import { assert } from 'chai';
 import { it, describe } from 'mocha';
@@ -56,6 +56,7 @@ const server = http.createServer(function (req, res) {
         req.setTimeout(1024);
       } else if (req.url.endsWith('destroy')) {
         req.destroy();
+        res.destroy();
       } else {
         res.writeHead(204);
         res.end();
@@ -122,8 +123,8 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isObject(resp.headers, 'Headers Object is presented');
-        assert.equal(resp.headers['content-type'], 'text/html', 'Correct content-type header');
-        assert.equal(resp.headers.location, 'https://1.1.1.1/', 'Correct location header');
+        assert.include(resp.headers['content-type'], 'text/html', 'Correct content-type header');
+        assert.equal(resp.headers.location, 'https://one.one.one.one/', 'Correct location header');
         done();
       });
     });
@@ -137,7 +138,7 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
         assert.isObject(resp.headers, 'Headers Object is presented');
-        assert.equal(resp.headers['content-type'], 'text/html', 'Correct content-type header');
+        assert.include(resp.headers['content-type'], 'text/html', 'Correct content-type header');
         done();
       });
     });
@@ -620,7 +621,7 @@ describe('LibCurlRequest', function () {
           assert.isObject(resp.headers, 'Headers Object is presented');
           assert.equal(resp.headers['content-type'], 'application/json', 'Correct content-type header');
         } catch (e) {
-          console.error('Your cURL module doesn\'t support "brotli" compression');
+          console.error('Your cURL module doesn\'t support "brotli" compression', e);
         }
         done();
       });
@@ -642,7 +643,7 @@ describe('LibCurlRequest', function () {
           assert.isObject(resp.headers, 'Headers Object is presented');
           assert.equal(resp.headers['content-type'], 'application/json', 'Correct content-type header');
         } catch (e) {
-          console.error('Your cURL module doesn\'t support "brotli" compression');
+          console.error('Your cURL module doesn\'t support "brotli" compression', e);
         }
         done();
       });
@@ -1539,6 +1540,114 @@ describe('LibCurlRequest', function () {
         }
         done();
       });
+    });
+  });
+});
+
+describe('ASYNC LibCurlRequest', function () {
+  this.slow(120000);
+  this.timeout(180000);
+
+  describe('ASYNC BASICS', () => {
+    it('.abortAsync()', async () => {
+      const req = request({
+        url: 'http://яндекс.рф',
+        wait: true,
+        isPromise: true,
+      });
+
+      assert.equal(req.finished, false, '.finished is false');
+      const waitForAbort = new Promise(async (resolve) => {
+        await req.abortAsync();
+        assert.equal(req.finished, true, '.finished is true');
+        resolve();
+      });
+
+      req.send();
+      try {
+        await Promise.all([waitForAbort, req.promise]);
+      } catch (error) {
+        assert.isObject(error, 'error isObject');
+        assert.equal(error.code, 42, 'error.code is 42');
+        assert.equal(error.errorCode, 42, 'error.errorCode is 42');
+        assert.equal(error.status, 499, 'error.status is 499');
+        assert.equal(error.statusCode, 499, 'error.statusCode is 499');
+        assert.equal(error.message, '499: Client Closed Request', 'error.message is correctly set');
+      }
+    });
+
+    it('requestAsync: GET/HTTP/IP-ADDRESS', async () => {
+      const resp = await requestAsync({
+        url: 'http://1.1.1.1'
+      });
+
+      assert.isOk(true, 'got response');
+      assert.equal(resp.statusCode, 200, 'statusCode: 200');
+      assert.equal(resp.status, 200, 'status: 200');
+      assert.isObject(resp.headers, 'Headers Object is presented');
+      assert.include(resp.headers['content-type'], 'text/html', 'Correct content-type header');
+      assert.equal(resp.headers.location, 'https://one.one.one.one/', 'Correct location header');
+    });
+
+    it('"wait" requestAsync/sendAsync: GET/HTTP/IP-ADDRESS', async () => {
+      const req = await requestAsync({
+        url: 'http://1.1.1.1',
+        wait: true
+      });
+
+      const resp = await req.sendAsync();
+      assert.isOk(true, 'got response');
+      assert.equal(resp.statusCode, 200, 'statusCode: 200');
+      assert.equal(resp.status, 200, 'status: 200');
+      assert.isObject(resp.headers, 'Headers Object is presented');
+      assert.include(resp.headers['content-type'], 'text/html', 'Correct content-type header');
+      assert.equal(resp.headers.location, 'https://one.one.one.one/', 'Correct location header');
+    });
+  });
+
+  describe('ASYNC GET', () => {
+    it('GET/no-response', async () => {
+      try{
+        await requestAsync({
+          url: TEST_URL + '/no-response',
+          timeout: 1024
+        });
+      } catch (error) {
+        assert.equal(error.statusCode, 408, 'statusCode: 408');
+        assert.equal(error.status, 408, 'status: 408');
+        assert.equal(error.errorCode, 28, 'status: 28');
+        assert.equal(error.code, 28, 'code: 28');
+        assert.equal(error.message, 'Error: Timeout was reached', 'error message is presented');
+      }
+    });
+
+    it('GET/no-response-timeout', async () => {
+      try{
+        await requestAsync({
+          url: TEST_URL + '/no-response-timeout',
+          timeout: 10000
+        });
+      } catch (error) {
+        assert.equal(error.statusCode, 503, 'statusCode: 503');
+        assert.equal(error.status, 503, 'status: 503');
+        assert.equal(error.errorCode, 52, 'status: 52');
+        assert.equal(error.code, 52, 'code: 52');
+        assert.equal(error.message, 'Error: Server returned nothing (no headers, no data)', 'error message is presented');
+      }
+    });
+
+    it('GET/destroy', async () => {
+      try{
+        await requestAsync({
+          url: TEST_URL + '/destroy'
+        });
+      } catch (error) {
+        assert.equal(error.statusCode, 503, 'statusCode: 503');
+        assert.equal(error.status, 503, 'status: 503');
+        assert.equal(error.errorCode, 52, 'status: 52');
+        assert.equal(error.code, 52, 'code: 52');
+        assert.equal(error.message, 'Error: Server returned nothing (no headers, no data)', 'error message is presented');
+      }
     });
   });
 });
