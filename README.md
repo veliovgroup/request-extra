@@ -9,12 +9,13 @@
 npm install --save request-libcurl
 ```
 
-__This is a server-only package.__ This package was created due to a lack of stability in the Node's `http`/`https` *ClientRequest* and simplicity in `fetch` modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`, later core library might be changed, but we would keep same API and idea about fast, sustainable and simple HTTP requests.
+__This is a server-only package.__ `request-libcurl` package was created due to a lack of stability in the Node's `http`/`https` *ClientRequest* and simplicity of `fetch` modules. Since we've been looking for something tested by decades and generations, — our choice stopped on `libcurl`. Hence `request-libcurl` package incorporates stability and performance of `libcurl` with simplicity of `request` API
 
 ## Main features
 
 - 👨‍💻 98% tests coverage + TDD (*only for http(s)*);
 - 👷‍♂️ Follow `request` API (*simplified*);
+- 🚀 Async/Await API + callback API
 - 📦 The single dependency on `node-libcurl` package;
 - ㊗️ IDNs support (*internationalized domain names*);
 - 🛡 Repeat (*built-in retries*) request on failed or broken connection;
@@ -51,22 +52,34 @@ __This is a server-only package.__ This package was created due to a lack of sta
 ## Install
 
 ```shell
-# ONLY for node@^16.14
+# ONLY for node@>=18
 npm install request-libcurl --save
 
-# ONLY for node@^14.14 || >=16 || <16.14
+# for node@>=16.14 || >=18 || >=20 || >=21 (no async API)
+npm install request-libcurl@4.0.0 --save
+
+# for node@^14.14 || >=16 || <16.14 (no async API)
 npm install request-libcurl@3.0.0 --save
 
-# for node@>=9.0.0
+# for node@>=9.0.0 (no async API)
 npm install request-libcurl@2.3.4 --save
 ```
 
 ```js
 // Import
-import request from 'request-libcurl';
+import request, { requestAsync } from 'request-libcurl';
 
 // CommonJS
-const request = require('request-libcurl');
+const { default: request, requestAsync } = require('request-libcurl');
+// OR
+const request = require('request-libcurl').default;
+const requestAsync = require('request-libcurl').requestAsync;
+```
+
+## Basic usage
+
+```js
+const { status, headers, body } = await requestAsync({ url: 'https://api.example.com/data.json' });
 ```
 
 ## Note
@@ -76,7 +89,7 @@ We build this package to serve our needs and solve our issues with Node's native
 ## API
 
 ```js
-import request from 'request-libcurl';
+import request, { requestAsync } from 'request-libcurl';
 
 const opts = {
   method: 'GET', // POST, GET
@@ -97,6 +110,14 @@ const opts = {
   maxRedirects: 4, // Number
   rejectUnauthorized: false // Boolean
 };
+
+// Async API
+try {
+  const { statusCode, body, headers } = await requestAsync(opts);
+} catch (error) {
+  // Houston we got a problem! 😱
+  const { errorCode, code, statusCode, message } = error;
+}
 
 // Callback API
 request(opts, (error, resp) => {
@@ -208,26 +229,55 @@ __Notes__:
 
 ### Returns `req` *Object*
 
+Using async API
+
 ```js
-import request from 'request-libcurl';
-const req = request({ url: 'https://example.com' });
+import { requestAsync } from 'request-libcurl';
+
+// WITH { wait: true }
+const req = await requestAsync({ url: 'https://example.com', wait: true });
+try {
+  const { statusCode, body, headers } = await req.sendAsync();
+} catch (error) {
+  const { errorCode, code, statusCode, message } = error;
+}
+
+// GET RESPONSE RIGHT AWAY
+const { statusCode, body, headers } = await requestAsync({ url: 'https://example.com' });
 ```
 
-- `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
-- `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
-- `req.pipe(stream.Writable)` - Pipe response to a *WritableStream*, for example download a file to FS. Use with `{wait: true, retry: false}` options, and `.send()` method
-- `req.onData(callback)` - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
-- `req.onHeader(callback)` - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
-- `callback(error, resp)` - Callback triggered on successful response
+- `req` {*LibCurlRequest*} - The *LibCurlRequest* instance returned only with `{ wait: true }` option, otherwise it returns *Response* (`resp` in the docs) right away
+- `req.abortAsync()` {*Promise*} - Abort current request, request will return `499: Client Closed Request` HTTP error
+- `req.sendAsync()` {*Promise*} - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
+- `req.pipe(stream.Writable)` {*Function*} - Pipe response to a *WritableStream*, for example download a file to FS. Use with `{wait: true, retry: false}` options, and `.send()` method
+- `req.onData(callback)` {*Function*} - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
+- `req.onHeader(callback)` {*Function*} - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
+- `resp` {*Response*} - Successful response
   - `error` {*undefined*};
   - `resp.statusCode` {*Number*} - HTTP status code;
   - `resp.body` {*String*} - Body of HTTP response, not modified or processed, as it is — plain text;
   - `resp.headers` {*Object*} - Key-value plain *Object* with pairs of response headers;
-- `callback(error)` - Callback triggered on failed request
+- `error` {*ResponseError*} - Failed response
   - `error.errorCode` {*Number*} - `libcurl` internal error code;
   - `error.code` {*Number*} - `libcurl` internal error code, same as `errorCode`;
   - `error.statusCode` {*Number*} - HTTP error code, if any;
   - `error.message` {*String*} - Human-readable error.
+
+Using callback API
+
+```js
+import request from 'request-libcurl';
+const req = request({ url: 'https://example.com' }, callback);
+```
+
+- `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
+- `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
+- `callback(error, resp)` - Callback triggered on successful response
+  - `error` {*undefined*};
+  - `resp` {*Response*}
+- `callback(error)` - Callback triggered on failed request
+  - `error` {*ResponseError*};
+- The rest of methods match async API
 
 ## Examples
 
@@ -238,13 +288,10 @@ Send GET and POST requests, download and upload files — all just in few lines 
 By default `request-libcurl` will take care of chunked responses and encoding:
 
 ```js
-import request from 'request-libcurl';
+import { requestAsync } from 'request-libcurl';
 
 // GET request:
-request({ url: 'https://example.com' }, (error, resp) => {
-  console.log(resp.body)
-  /* ... */
-});
+const { body } = await requestAsync({ url: 'https://example.com' });
 ```
 
 For full control over request/response streams, chunks, and encoding use `{rawBody: true, wait: true, retry: false}` options with `.onData()` and `.onHeader()` callbacks:
@@ -254,21 +301,11 @@ let responseBody = Buffer.from('');
 let responseHeaders = Buffer.from('');
 const headersObj = {};
 
-const req = request({
+const req = await requestAsync({
   url: 'https://example.com',
   retry: false, // Do not retry with rawBody/noStorage, as it may mess up with headers and body inside `.onData()` and `.onHeader()` callbacks
   rawBody: true,
   wait: true // Using 'wait' option to set `.onData()` and `.onHeader()` callbacks
-}, (error) => {
-  if (error) {
-    throw error;
-  }
-  // Body as plain-string
-  const body = responseBody.toString('utf8');
-  // All headers as plain multi-line string
-  const headers = responseHeaders.toString('utf8');
-  // All headers as plain-Object
-  console.log(headersObj);
 });
 
 req.onData((chunkAsBuffer) => {
@@ -289,38 +326,41 @@ req.onHeader((chunkAsBuffer) => {
   }
 });
 
-req.send();
+await req.sendAsync();
+// Body as plain-string
+const body = responseBody.toString('utf8');
+// All headers as plain multi-line string
+const headers = responseHeaders.toString('utf8');
+// All headers as plain-Object
+console.log(headersObj);
 ```
 
 ### POST request
 
 ```js
-import request from 'request-libcurl';
+import request, { requestAsync } from 'request-libcurl';
 import querystring from 'querystring';
 
 // POST (Content-Type: application/x-www-form-urlencoded):
 // by passing a String or formatted "Query String" to `form`
-request({
+const resp = await requestAsync({
   method: 'POST',
   url: 'https://example.com',
   form: querystring.stringify({ myForm: 'data' })
-}, (error, resp) => {
-  /* ... */
-});
+};
 
 // POST with Authorization (Content-Type: application/x-www-form-urlencoded):
 // by passing a String or formatted "Query String" to `form`
-request({
+const resp = await requestAsync({
   method: 'POST',
   url: 'https://example.com',
   auth: 'username:passwd',
   form: querystring.stringify({ myForm: 'data' })
-}, (error, resp) => {
-  /* ... */
 });
 
 // POST (Content-Type: application/json):
 // by passing plain Object to `form`
+// calling via callback API
 request({
   method: 'POST',
   url: 'https://example.com',
@@ -333,30 +373,28 @@ request({
 ### POST request with extra options
 
 ```js
-import request from 'request-libcurl';
+import { requestAsync } from 'request-libcurl';
 
 // POST with Authorization (Content-Type: application/json):
 // by passing plain Object to `form`
-request({
+const resp = await requestAsync({
   method: 'POST',
   url: 'https://example.com',
   auth: 'username:passwd',
-  form: { myForm: 'data' }
-}, (error, resp) => {
-  /* ... */
+  form: {
+    myJSON: 'data'
+  }
 });
 
 // Custom POST (Content-Type: text/plain):
 // by passing custom Headers
-request({
+const resp = await requestAsync({
   method: 'POST',
   url: 'https://example.com',
   form: 'Plain String or Base64 String or any other String',
   headers: {
     'Content-Type': 'text/plain'
   }
-}, (error, resp) => {
-  /* ... */
 });
 ```
 
@@ -393,66 +431,50 @@ const req = request({
 Download a file to the FileSystem using `.pipe()` method:
 
 ```js
-import fs from 'fs';
-import request from 'request-libcurl';
+import fs from 'node:fs/promises';
+import { requestAsync } from 'request-libcurl';
 
-const req = request({
+const req = await requestAsync({
   url: 'https://example.com/file.pdf',
   wait: true,
   retry: false // Do not retry when download!
-}, (error, resp) => {
-  if (error) {
-    throw error;
-  } else {
-    // File successfully downloaded
-    fs.stat('/path/to/file.pdf', (error, stats) => {
-      // do something with downloaded file
-    });
-  }
 });
 
-req.pipe(fs.createWriteStream('/path/to/file.pdf', {flags: 'w'}));
+req.pipe(fs.createWriteStream('/path/to/file.pdf', { flags: 'w' }));
 // .pipe() method can be used to pass download to a multiple WritableStream(s):
 // req.pipe(fs.createWriteStream('/backup/downloads/file.pdf', {flags: 'w'}));
 
-req.send();
+await req.sendAsync();
+// File successfully downloaded
+
+const stats = await fs.stat('/path/to/file.pdf');
+// do something with downloaded file
 ```
 
 ### File upload
 
 ```js
-import fs from 'fs';
-import request from 'request-libcurl';
+import fs from 'node:fs/promises';
+import { requestAsync } from 'request-libcurl';
 
-fs.open('/path/to/a/file', 'r', function(err, fd) {
-  if (err) {
-    throw new Error('can not read the file');
-  }
-
-  request({
-    method: 'POST',
-    url: 'https://example.com/upload',
-    upload: fd,
-    retry: false,
-  }, (error, resp) => {
-    if (error) {
-      throw error;
-    } else {
-      // File successfully uploaded
-    }
-  });
+await requestAsync({
+  method: 'POST',
+  url: 'https://example.com/upload',
+  upload: await fs.open('/path/to/a/file', 'r'),
+  retry: false,
 });
+// File successfully uploaded
 ```
 
 ### File upload (`multipart/form-data`)
 
-In this example we are going to use [`HTTPPOST` libcurl option](https://curl.haxx.se/libcurl/c/CURLOPT_HTTPPOST.html) passing `[Object]` (*array of Objects* representing files, note: multiple files can be passed in a single request) via `curlOptions`
+In this example we are going to use [`HTTPPOST` libcurl option](https://curl.haxx.se/libcurl/c/CURLOPT_HTTPPOST.html) passing `Object[]` (*array of Objects* representing files, note: multiple files can be passed in a single request) via `curlOptions`
 
 ```js
-import request from 'request-libcurl';
+import { requestAsync } from 'request-libcurl';
 const fileLocation = '/full/absolute/path/to/a/file.ext';
 
-request({
+await requestAsync({
   method: 'POST', // Can be used with PUT
   url: 'https://example.com/upload.php',
   retry: false,
@@ -461,15 +483,10 @@ request({
       name: 'file.ext', // File's name
       file: fileLocation, // Full absolute path to a file on FS
       type: 'application/ext' // File's mime-type
-    } /*, {...} */]
-  }
-}, (error) => {
-  if (error) {
-    throw error;
-  } else {
-    // File(s) successfully uploaded
+    } /*, {...multiple files here...} */]
   }
 });
+// File(s) successfully uploaded
 ```
 
 ## Known Issues
@@ -491,6 +508,10 @@ request.defaultOptions.rejectUnauthorized = true;
 Due to single dependency on `node-libcurl` which shipped with statically built binaries, you may encounter `This module was compiled against a different Node.js version using NODE_MODULE_VERSION` error. This may happen on edge cases, like running the very latest release of node.js (*while bundled builds aren't shipped yet*), then you may want to build this package locally, use one of next commands:
 
 ```shell
+# First: ensure node.js version is matching supported request-libcurl version
+# See "Install" section at the top of this document to check supported versions
+# package might require downgrade installing explicit version
+
 # Please see options below, in dependence from version of NPM and Node.js
 # one of this options should solve this issue
 
