@@ -84,7 +84,7 @@ const { status, headers, body } = await requestAsync({ url: 'https://api.example
 
 ## Note
 
-We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or compatible only partially.
+We build this package to serve our needs and solve our issues with Node's native API. It may have a lack of compatibility with `request()` module API, or be compatible only partially. [PRs, suggestions, and discussions](https://github.com/veliovgroup/request-extra/issues) are always welcome.
 
 ## API
 
@@ -229,7 +229,10 @@ __Notes__:
 
 ### Returns `req` *Object*
 
-Using async API
+- `request()` and `requestAsync({ wait: true })` return `req` instance of {*LibCurlRequest*}
+- `requestAsync()` (*without wait*) and `req.sendAsync()` return {*Response*} upon resolve
+
+#### Using async API
 
 ```js
 import { requestAsync } from 'request-libcurl';
@@ -243,13 +246,18 @@ try {
 }
 
 // GET RESPONSE RIGHT AWAY
-const { statusCode, body, headers } = await requestAsync({ url: 'https://example.com' });
+try {
+  const resp = await requestAsync({ url: 'https://example.com' });
+  const { statusCode, body, headers } = resp;
+} catch (error) {
+  const { errorCode, code, statusCode, message } = error;
+}
 ```
 
 - `req` {*LibCurlRequest*} - The *LibCurlRequest* instance returned only with `{ wait: true }` option, otherwise it returns *Response* (`resp` in the docs) right away
-- `req.abortAsync()` {*Promise*} - Abort current request, request will return `499: Client Closed Request` HTTP error
-- `req.sendAsync()` {*Promise*} - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
-- `req.pipe(stream.Writable)` {*Function*} - Pipe response to a *WritableStream*, for example download a file to FS. Use with `{wait: true, retry: false}` options, and `.send()` method
+- `req.abortAsync()` {*Promise*} - Abort current request, request will throw `499: Client Closed Request` HTTP error
+- `req.sendAsync()` {*Promise*} - Send request, use it with `{ wait: true }`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
+- `req.pipe(stream.Writable)` {*Function*} - Pipe response to a *WritableStream*, for example download a file to FS. Use with `{wait: true, retry: false}` options, and `.sendAsync()` method
 - `req.onData(callback)` {*Function*} - Hook, called right after data is received, called for each data-chunk. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
 - `req.onHeader(callback)` {*Function*} - Hook, called right after header is received, called for each header. Useful with `.pipe()`, `rawBody`/`noStorage` and callbacks/events
 - `resp` {*Response*} - Successful response
@@ -263,7 +271,7 @@ const { statusCode, body, headers } = await requestAsync({ url: 'https://example
   - `error.statusCode` {*Number*} - HTTP error code, if any;
   - `error.message` {*String*} - Human-readable error.
 
-Using callback API
+#### Using callback API
 
 ```js
 import request from 'request-libcurl';
@@ -271,7 +279,7 @@ const req = request({ url: 'https://example.com' }, callback);
 ```
 
 - `req.abort()` - Abort current request, request will return `499: Client Closed Request` HTTP error
-- `req.send()` - Send request, use it with `wait`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
+- `req.send()` - Send request, use it with `{ wait: true }`. For example with `rawBody`/`noStorage`, when you need to delay sending request, for example to set event listeners and/or callbacks
 - `callback(error, resp)` - Callback triggered on successful response
   - `error` {*undefined*};
   - `resp` {*Response*}

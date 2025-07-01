@@ -1,5 +1,5 @@
-import fs from 'fs';
-import { URL } from 'url';
+import fs from 'node:fs';
+import { URL } from 'node:url';
 import { Curl, CurlFeature } from 'node-libcurl';
 const SSL_ERROR_CODES = [58, 60, 83, 90, 91];
 const CURL_ERROR_CODES = [3, 4, 47];
@@ -39,7 +39,7 @@ const closeCurl = (curl) => {
     if (curl && curl.close) {
       curl.close.call(curl);
     }
-  } catch (err) {
+  } catch (_err) {
     // we are good here
   }
 };
@@ -49,8 +49,8 @@ const sendRequest = (libcurl, url, cb) => {
 
   closeCurl(libcurl.curl);
 
-  const opts = libcurl.opts;
   const curl = new Curl();
+  const opts = libcurl.opts;
   let finished = false;
   let timeoutTimer = null;
   let isJsonUpload = false;
@@ -194,6 +194,7 @@ const sendRequest = (libcurl, url, cb) => {
   curl.on('end', (statusCode, body, _headers) => {
     libcurl._debug('[END EVENT]', opts.retries, url.href, finished, statusCode);
     stopRequestTimeout();
+    curl.removeAllListeners();
     if (finished) { return; }
     finished = true;
 
@@ -250,6 +251,7 @@ const sendRequest = (libcurl, url, cb) => {
   curl.on('error', (error, errorCode) => {
     libcurl._debug('REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
     stopRequestTimeout();
+    curl.removeAllListeners();
     if (finished) { return; }
 
     finished = true;
@@ -386,6 +388,13 @@ class LibCurlRequest {
       throw new TypeError('{opts} expecting an Object as first argument');
     }
 
+    if (!cb && opts.isPromise) {
+      this.promise = new Promise((resolve, reject) => {
+        this._resolve = resolve;
+        this._reject = reject;
+      });
+    }
+
     this.cb = typeof cb === 'function' ? cb : noop;
     this.sent = false;
     this.pipeTo = [];
@@ -431,7 +440,11 @@ class LibCurlRequest {
       this.sent = true;
       this.finished = true;
       process.nextTick(() => {
-        this.cb(badUrlError);
+        if (this.opts.isPromise) {
+          this._reject(badUrlError);
+        } else {
+          this.cb(badUrlError);
+        }
       });
       return;
     }
@@ -511,9 +524,17 @@ class LibCurlRequest {
       this.finished = true;
       this._stopRequestTimeout();
       if (error) {
-        this.cb(error);
+        if (this.opts.isPromise) {
+          this._reject(error);
+        } else {
+          this.cb(error);
+        }
       } else {
-        this.cb(void 0, result);
+        if (this.opts.isPromise) {
+          this._resolve(result);
+        } else {
+          this.cb(void 0, result);
+        }
       }
     }
   }
@@ -532,9 +553,18 @@ class LibCurlRequest {
     return this;
   }
 
+  async sendAsync() {
+    if (!this.opts.isPromise) {
+      throw new Error('Calling .sendAsync() on non-async API, use requestAsync() to invoke async API');
+    }
+    this.send();
+    return this.promise;
+  }
+
   abort() {
     this._debug('[abort]', this.opts.url);
     this._stopRequestTimeout();
+    this.curl?.removeAllListeners?.();
 
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
@@ -545,14 +575,35 @@ class LibCurlRequest {
       closeCurl(this.curl);
 
       this.finished = true;
-      this.cb(abortError);
+      if (this.opts.isPromise) {
+        this._reject(abortError);
+      } else {
+        this.cb(abortError);
+      }
     }
     return this;
+  }
+
+  async abortAsync() {
+    if (!this.opts.isPromise) {
+      throw new Error('Calling .abortAsync() on non-async API, use requestAsync() to invoke async API');
+    }
+    this.abort();
+    return this.promise;
   }
 }
 
 function request (opts, cb) {
   return new LibCurlRequest(opts, cb);
+}
+
+async function requestAsync (opts) {
+  if (opts.wait) {
+    return new LibCurlRequest(Object.assign({}, opts, { isPromise: true }));
+  }
+
+  const req = new LibCurlRequest(Object.assign({}, opts, { isPromise: true }));
+  return req.promise;
 }
 
 request.defaultOptions = {
@@ -576,9 +627,10 @@ request.defaultOptions = {
     return badStatuses.includes(statusCode) || statusCode >= 500;
   },
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
     Accept: '*/*'
   }
 };
 
 export default request;
+export { requestAsync };

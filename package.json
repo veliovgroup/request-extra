@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "index.js",
   "type": "module",
@@ -27,6 +27,8 @@
     "https",
     "post",
     "get",
+    "async",
+    "fetch",
     "API",
     "rest",
     "request-libcurl",
@@ -43,6 +45,8 @@
     "https",
     "post",
     "get",
+    "async",
+    "fetch",
     "API",
     "rest",
     "request-libcurl",
@@ -58,10 +62,10 @@
   },
   "homepage": "https://github.com/veliovgroup/request-extra#readme",
   "devDependencies": {
-    "chai": "^5.1.1",
-    "mocha": "^10.6.0"
+    "chai": "^5.2.0",
+    "mocha": "^11.7.1"
   },
   "dependencies": {
-    "node-libcurl": "^4.0.0"
+    "node-libcurl": "^4.1.0"
   }
 }
