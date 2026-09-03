@@ -71,9 +71,9 @@ See [Retries and errors](./retries-and-errors.md).
 - `.onData(callback)` registers per-chunk response callback and returns request.
 - `.onHeader(callback)` registers per-header callback and returns request.
 - `.send()` starts request once and returns request.
-- `.sendAsync()` starts Promise-mode request and resolves with `Response`.
-- `.abort()` stops request and returns request.
-- `.abortAsync()` stops Promise-mode request and rejects with abort error.
+- `.sendAsync()` starts Promise-mode request once and returns its Promise, which resolves with `Response` or rejects with `ResponseError`.
+- `.abort()` aborts unfinished request and returns request.
+- `.abortAsync()` aborts unfinished Promise-mode request. It rejects with abort error when request is still active; after completion, it returns existing settled Promise.
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.
 
