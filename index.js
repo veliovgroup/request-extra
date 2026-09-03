@@ -37,6 +37,15 @@ const createPipeError = (cause) => {
   return error;
 };
 
+const createConfigurationError = (cause) => {
+  const error = new Error('500: Invalid Curl configuration', { cause });
+  error.code = 4;
+  error.status = 500;
+  error.errorCode = 4;
+  error.statusCode = 500;
+  return error;
+};
+
 const noop = () => {};
 
 const _debug = (...args) => {
@@ -53,6 +62,47 @@ const closeCurl = (curl) => {
   }
 };
 
+const HTTP_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+const getHeaderLines = (headers) => Object.entries(headers).map(([name, value]) => {
+  if (!HTTP_TOKEN.test(name)) {
+    throw new TypeError(`Invalid HTTP header name: "${name}"`);
+  }
+  if (value !== null && value !== undefined && value !== false && /[\r\n]/.test(String(value))) {
+    throw new TypeError(`Invalid HTTP header value for "${name}"`);
+  }
+  return [name, value];
+});
+
+const normalizeOptions = (opts) => {
+  if (!opts || typeof opts !== 'object' || Array.isArray(opts)) {
+    throw new TypeError('{opts} expecting an Object as first argument');
+  }
+
+  const definedOptions = Object.fromEntries(
+    Object.entries(opts).filter(([, value]) => value !== undefined)
+  );
+  const normalized = {
+    ...request.defaultOptions,
+    ...definedOptions,
+    headers: {
+      ...request.defaultOptions.headers,
+      ...(definedOptions.headers || {})
+    }
+  };
+
+  if (typeof normalized.method !== 'string' || !normalized.method.trim()) {
+    throw new TypeError('{opts.method} expecting a non-empty String');
+  }
+  for (const key of ['timeout', 'retryDelay', 'maxRedirects', 'retries']) {
+    if (!Number.isFinite(normalized[key]) || normalized[key] < 0) {
+      throw new TypeError(`{opts.${key}} expecting a non-negative finite Number`);
+    }
+  }
+  normalized.method = normalized.method.toUpperCase();
+  return normalized;
+};
+
 const sendRequest = (libcurl, url, cb) => {
   libcurl._debug('[sendRequest]', url.href);
 
@@ -67,6 +117,7 @@ const sendRequest = (libcurl, url, cb) => {
   let hasContentType = false;
   let hasContentLength = false;
   let hasAcceptEncoding = false;
+  let configurationError = null;
 
   const stopRequestTimeout = () => {
     if (timeoutTimer) {
@@ -137,24 +188,21 @@ const sendRequest = (libcurl, url, cb) => {
 
   const customHeaders = [];
 
-  let lcHeader = '';
-  for (let header in opts.headers) {
-    if (typeof header === 'string') {
-      lcHeader = header.toLowerCase();
-      if (lcHeader === 'content-type') {
-        hasContentType = true;
-      } else if (lcHeader === 'content-length') {
-        hasContentLength = true;
-      } else if (lcHeader === 'accept-encoding') {
-        hasAcceptEncoding = opts.headers[header];
-      }
-      if (opts.headers[header] === void 0 || opts.headers[header] === null || opts.headers[header] === false) {
-        // UNSET DEFAULT HEADERS
-        customHeaders.push(`${header}: `);
-      } else {
-        // SET CUSTOM HEADERS
-        customHeaders.push(`${header}: ${opts.headers[header]}`);
-      }
+  for (const [header, value] of getHeaderLines(opts.headers)) {
+    const lcHeader = header.toLowerCase();
+    if (lcHeader === 'content-type') {
+      hasContentType = true;
+    } else if (lcHeader === 'content-length') {
+      hasContentLength = true;
+    } else if (lcHeader === 'accept-encoding') {
+      hasAcceptEncoding = value;
+    }
+    if (value === undefined || value === null || value === false) {
+      // UNSET DEFAULT HEADERS
+      customHeaders.push(`${header}: `);
+    } else {
+      // SET CUSTOM HEADERS
+      customHeaders.push(`${header}: ${value}`);
     }
   }
 
@@ -213,9 +261,9 @@ const sendRequest = (libcurl, url, cb) => {
     const lastHeadersIndex = _headers.length - 1;
     if (_headers && _headers.length && _headers[lastHeadersIndex]) {
       delete _headers[lastHeadersIndex].result;
-      for (let headerName in _headers[lastHeadersIndex]) {
-        if (_headers[lastHeadersIndex][headerName]) {
-          headers[headerName.toLowerCase()] = _headers[lastHeadersIndex][headerName];
+      for (const [headerName, value] of Object.entries(_headers[lastHeadersIndex])) {
+        if (value) {
+          headers[headerName.toLowerCase()] = value;
         }
       }
     }
@@ -361,39 +409,51 @@ const sendRequest = (libcurl, url, cb) => {
   }
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
-    for (let option in opts.curlOptions) {
-      if (Curl.option[option] !== undefined) {
+    for (const [option, value] of Object.entries(opts.curlOptions)) {
+      if (Curl.option[option] === undefined) {
+        configurationError ||= createConfigurationError(new TypeError(`Unknown Curl option: ${option}`));
+      } else if (option === 'TIMEOUT_MS' && (!Number.isFinite(value) || value < 0)) {
+        configurationError ||= createConfigurationError(new TypeError(`Invalid Curl option value: ${option}`));
+      } else {
         try {
-          curl.setOpt(Curl.option[option], opts.curlOptions[option]);
+          curl.setOpt(Curl.option[option], value);
         } catch (curlOptionError) {
-          curlOptionError.code = 4;
-          curlOptionError.status = 500;
-          curlOptionError.errorCode = 4;
-          curlOptionError.statusCode = 500;
-          _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, opts.curlOptions[option], {curlOptions: opts.curlOptions });
+          configurationError ||= createConfigurationError(curlOptionError);
+          _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, value, {curlOptions: opts.curlOptions });
         }
       }
     }
   }
 
   if (opts.curlFeatures && typeof opts.curlFeatures === 'object') {
-    for (let option in opts.curlFeatures) {
-      if (CurlFeature[option] !== undefined) {
+    for (const [option, value] of Object.entries(opts.curlFeatures)) {
+      if (CurlFeature[option] === undefined) {
+        configurationError ||= createConfigurationError(new TypeError(`Unknown Curl feature: ${option}`));
+      } else if (typeof value !== 'boolean') {
+        configurationError ||= createConfigurationError(new TypeError(`Invalid Curl feature value: ${option}`));
+      } else {
         try {
-          if (opts.curlFeatures[option] === true) {
+          if (value === true) {
             curl.enable(CurlFeature[option]);
-          } else if (opts.curlFeatures[option] === false) {
+          } else {
             curl.disable(CurlFeature[option]);
           }
         } catch (curlFeatureError) {
-          curlFeatureError.code = 4;
-          curlFeatureError.status = 500;
-          curlFeatureError.errorCode = 4;
-          curlFeatureError.statusCode = 500;
-          _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, opts.curlFeatures[option], {curlFeatures: opts.curlFeatures });
+          configurationError ||= createConfigurationError(curlFeatureError);
+          _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, value, {curlFeatures: opts.curlFeatures });
         }
       }
     }
+  }
+
+  if (configurationError) {
+    finished = true;
+    stopRequestTimeout();
+    process.nextTick(() => {
+      closeCurl(curl);
+      cb(configurationError);
+    });
+    return curl;
   }
 
   curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
@@ -412,11 +472,9 @@ class LibCurlRequest {
   constructor (opts, cb) {
     let isBadUrl = false;
 
-    if (typeof opts !== 'object') {
-      throw new TypeError('{opts} expecting an Object as first argument');
-    }
+    this.opts = normalizeOptions(opts);
 
-    if (!cb && opts.isPromise) {
+    if (!cb && this.opts.isPromise) {
       this.promise = new Promise((resolve, reject) => {
         this._resolve = resolve;
         this._reject = reject;
@@ -429,9 +487,6 @@ class LibCurlRequest {
     this.finished = false;
     this.retryTimer = false;
     this.timeoutTimer = null;
-
-    this.opts = { ...request.defaultOptions, ...opts, headers: { ...request.defaultOptions.headers, ...opts.headers }};
-    this.opts.method = this.opts.method.toUpperCase();
 
     if (this.opts.debug) {
       this._debug = _debug;
@@ -477,9 +532,9 @@ class LibCurlRequest {
       return;
     }
 
-    if (opts.pipeTo) {
-      if (opts.pipeTo.write && opts.pipeTo.end) {
-        this.pipeTo.push(opts.pipeTo);
+    if (this.opts.pipeTo) {
+      if (this.opts.pipeTo.write && this.opts.pipeTo.end) {
+        this.pipeTo.push(this.opts.pipeTo);
       } else {
         throw new TypeError('[request-libcurl] {opts.pipeTo} option expected to be {stream.Writable}');
       }
