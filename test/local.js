@@ -47,6 +47,17 @@ describe('local runtime', () => {
     );
   });
 
+  it('validates headers before creating a waiting request', () => {
+    strictAssert.throws(
+      () => request({
+        url: 'http://127.0.0.1:1',
+        wait: true,
+        headers: { 'Bad Header': 'value' }
+      }),
+      { name: 'TypeError', message: 'Invalid HTTP header name: "Bad Header"' }
+    );
+  });
+
   it('does not send inherited request headers', async () => {
     const headers = Object.create({ 'X-Inherited': 'blocked' });
     headers['X-Own'] = 'sent';

@@ -74,6 +74,26 @@ const getHeaderLines = (headers) => Object.entries(headers).map(([name, value]) 
   return [name, value];
 });
 
+const validateCurlConfiguration = (opts) => {
+  for (const [option, value] of Object.entries(opts.curlOptions || {})) {
+    if (Curl.option[option] === undefined) {
+      return createConfigurationError(new TypeError(`Unknown Curl option: ${option}`));
+    }
+    if (option === 'TIMEOUT_MS' && (!Number.isFinite(value) || value < 0)) {
+      return createConfigurationError(new TypeError(`Invalid Curl option value: ${option}`));
+    }
+  }
+  for (const [option, value] of Object.entries(opts.curlFeatures || {})) {
+    if (CurlFeature[option] === undefined) {
+      return createConfigurationError(new TypeError(`Unknown Curl feature: ${option}`));
+    }
+    if (typeof value !== 'boolean') {
+      return createConfigurationError(new TypeError(`Invalid Curl feature value: ${option}`));
+    }
+  }
+  return null;
+};
+
 const normalizeOptions = (opts) => {
   if (!opts || typeof opts !== 'object' || Array.isArray(opts)) {
     throw new TypeError('{opts} expecting an Object as first argument');
@@ -100,16 +120,25 @@ const normalizeOptions = (opts) => {
     }
   }
   normalized.method = normalized.method.toUpperCase();
+  Object.defineProperties(normalized, {
+    _headerLines: { value: getHeaderLines(normalized.headers) },
+    _configurationError: { value: validateCurlConfiguration(normalized) }
+  });
   return normalized;
 };
 
 const sendRequest = (libcurl, url, cb) => {
   libcurl._debug('[sendRequest]', url.href);
 
+  const opts = libcurl.opts;
+  if (opts._configurationError) {
+    process.nextTick(() => cb(opts._configurationError));
+    return null;
+  }
+
   closeCurl(libcurl.curl);
 
   const curl = new Curl();
-  const opts = libcurl.opts;
   let finished = false;
   let pipeError = null;
   let timeoutTimer = null;
@@ -188,7 +217,7 @@ const sendRequest = (libcurl, url, cb) => {
 
   const customHeaders = [];
 
-  for (const [header, value] of getHeaderLines(opts.headers)) {
+  for (const [header, value] of opts._headerLines) {
     const lcHeader = header.toLowerCase();
     if (lcHeader === 'content-type') {
       hasContentType = true;
@@ -410,38 +439,26 @@ const sendRequest = (libcurl, url, cb) => {
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
     for (const [option, value] of Object.entries(opts.curlOptions)) {
-      if (Curl.option[option] === undefined) {
-        configurationError ||= createConfigurationError(new TypeError(`Unknown Curl option: ${option}`));
-      } else if (option === 'TIMEOUT_MS' && (!Number.isFinite(value) || value < 0)) {
-        configurationError ||= createConfigurationError(new TypeError(`Invalid Curl option value: ${option}`));
-      } else {
-        try {
-          curl.setOpt(Curl.option[option], value);
-        } catch (curlOptionError) {
-          configurationError ||= createConfigurationError(curlOptionError);
-          _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, value, {curlOptions: opts.curlOptions });
-        }
+      try {
+        curl.setOpt(Curl.option[option], value);
+      } catch (curlOptionError) {
+        configurationError ||= createConfigurationError(curlOptionError);
+        _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, value, {curlOptions: opts.curlOptions });
       }
     }
   }
 
   if (opts.curlFeatures && typeof opts.curlFeatures === 'object') {
     for (const [option, value] of Object.entries(opts.curlFeatures)) {
-      if (CurlFeature[option] === undefined) {
-        configurationError ||= createConfigurationError(new TypeError(`Unknown Curl feature: ${option}`));
-      } else if (typeof value !== 'boolean') {
-        configurationError ||= createConfigurationError(new TypeError(`Invalid Curl feature value: ${option}`));
-      } else {
-        try {
-          if (value === true) {
-            curl.enable(CurlFeature[option]);
-          } else {
-            curl.disable(CurlFeature[option]);
-          }
-        } catch (curlFeatureError) {
-          configurationError ||= createConfigurationError(curlFeatureError);
-          _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, value, {curlFeatures: opts.curlFeatures });
+      try {
+        if (value === true) {
+          curl.enable(CurlFeature[option]);
+        } else {
+          curl.disable(CurlFeature[option]);
         }
+      } catch (curlFeatureError) {
+        configurationError ||= createConfigurationError(curlFeatureError);
+        _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, value, {curlFeatures: opts.curlFeatures });
       }
     }
   }
