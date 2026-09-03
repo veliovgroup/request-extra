@@ -169,6 +169,7 @@ const sendRequest = (libcurl, url, cb) => {
     return null;
   }
 
+  libcurl._stopAttemptTimeout?.();
   closeCurl(libcurl.curl);
 
   const curl = new nodeLibcurl.Curl();
@@ -182,12 +183,16 @@ const sendRequest = (libcurl, url, cb) => {
   let hasAcceptEncoding = false;
   let configurationError = null;
 
-  const stopRequestTimeout = () => {
+  const stopAttemptTimeout = () => {
     if (timeoutTimer) {
       clearTimeout(timeoutTimer);
       timeoutTimer = null;
     }
+    if (libcurl._stopAttemptTimeout === stopAttemptTimeout) {
+      libcurl._stopAttemptTimeout = noop;
+    }
   };
+  libcurl._stopAttemptTimeout = stopAttemptTimeout;
 
   timeoutTimer = setTimeout(() => {
     libcurl.abort();
@@ -312,7 +317,7 @@ const sendRequest = (libcurl, url, cb) => {
 
   curl.on('end', (statusCode, body, _headers) => {
     libcurl._debug('[END EVENT]', opts.retries, url.href, finished, statusCode);
-    stopRequestTimeout();
+    stopAttemptTimeout();
     curl.removeAllListeners();
     if (finished) { return; }
     finished = true;
@@ -387,7 +392,7 @@ const sendRequest = (libcurl, url, cb) => {
 
   curl.on('error', (error, errorCode) => {
     libcurl._debug('REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
-    stopRequestTimeout();
+    stopAttemptTimeout();
     curl.removeAllListeners();
     if (finished) { return; }
 
@@ -444,7 +449,7 @@ const sendRequest = (libcurl, url, cb) => {
       } catch (e) {
         libcurl._debug('Can\'t stringify opts.form in POST request:', url.href, e);
         finished = true;
-        stopRequestTimeout();
+        stopAttemptTimeout();
         libcurl._stopRequestTimeout();
         process.nextTick(() => {
           libcurl.finished = true;
@@ -501,7 +506,7 @@ const sendRequest = (libcurl, url, cb) => {
 
   if (configurationError) {
     finished = true;
-    stopRequestTimeout();
+    stopAttemptTimeout();
     process.nextTick(() => {
       closeCurl(curl);
       cb(configurationError);
@@ -540,6 +545,7 @@ class LibCurlRequest {
     this.finished = false;
     this.retryTimer = false;
     this.timeoutTimer = null;
+    this._stopAttemptTimeout = noop;
 
     if (this.opts.debug) {
       this._debug = _debug;
@@ -664,6 +670,7 @@ class LibCurlRequest {
 
     if (!isRetry) {
       this.finished = true;
+      this._stopAttemptTimeout();
       this._stopRequestTimeout();
       if (error) {
         if (this.opts.isPromise) {
@@ -714,6 +721,7 @@ class LibCurlRequest {
 
   abort() {
     this._debug('[abort]', this.opts.url);
+    this._stopAttemptTimeout();
     this._stopRequestTimeout();
     this.curl?.removeAllListeners?.();
 

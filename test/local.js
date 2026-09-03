@@ -244,4 +244,16 @@ describe('local runtime', () => {
     assert.equal(exitCode, 0);
     assert.isBelow(Date.now() - started, 1000);
   });
+
+  it('does not retain per-attempt timeout after manual abort', async () => {
+    const { spawn } = await import('node:child_process');
+    const started = Date.now();
+    const child = spawn(process.execPath, ['test/fixtures/manual-abort.js'], {
+      cwd: process.cwd(),
+      stdio: 'inherit'
+    });
+    const exitCode = await new Promise((resolve) => child.once('exit', resolve));
+    assert.equal(exitCode, 0);
+    assert.isBelow(Date.now() - started, 750);
+  });
 });
