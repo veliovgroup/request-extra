@@ -1,4 +1,4 @@
-import request, { requestAsync } from 'request-libcurl';
+import request, { requestAsync, type RequestOptions } from 'request-libcurl';
 
 const options = {
   url: 'https://example.com',
@@ -8,6 +8,14 @@ const options = {
     'User-Agent': 'request-libcurl'
   }
 } as const;
+
+const retryOptions: RequestOptions = {
+  retryMethods: ['POST'],
+  retryMaxDelay: 30_000,
+  retryJitter: false,
+  respectRetryAfter: true
+};
+retryOptions.retryMethods?.includes('POST');
 
 request(options).abort();
 

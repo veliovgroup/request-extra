@@ -22,6 +22,10 @@ export interface RequestOptions {
   retry?: boolean;
   retries?: number;
   retryDelay?: number;
+  retryMethods?: string[];
+  retryMaxDelay?: number;
+  retryJitter?: boolean;
+  respectRetryAfter?: boolean;
   timeout?: number;
   keepAlive?: boolean;
   followRedirect?: boolean;

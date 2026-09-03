@@ -2,6 +2,7 @@ import request, {
   requestAsync,
   type LibCurlRequest,
   type RequestInput,
+  type RequestOptions,
   type Response,
   type ResponseError,
   type WritableLike
@@ -23,6 +24,14 @@ const opts: RequestInput = {
   headers: { Accept: '*/*' },
   pipeTo: writable
 };
+
+const retryOptions: RequestOptions = {
+  retryMethods: ['POST'],
+  retryMaxDelay: 30_000,
+  retryJitter: false,
+  respectRetryAfter: true
+};
+retryOptions.retryMethods?.includes('POST');
 
 const req: LibCurlRequest = request(opts, (error?: ResponseError, response?: Response) => {
   if (error) {

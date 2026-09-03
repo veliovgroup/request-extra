@@ -177,6 +177,80 @@ describe('local runtime', () => {
     }
   });
 
+  it('does not retry POST by default', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.writeHead(503);
+      res.end();
+    });
+    try {
+      await requestAsync({ url: server.url, method: 'POST', form: '{}', retries: 2, retryDelay: 0 });
+      assert.equal(attempts, 1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('retries POST when retryMethods explicitly includes POST', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.writeHead(503);
+      res.end();
+    });
+    try {
+      await requestAsync({
+        url: server.url,
+        method: 'POST',
+        form: '{}',
+        retries: 1,
+        retryDelay: 0,
+        retryMethods: ['POST']
+      });
+      assert.equal(attempts, 2);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('does not retry permanent client errors by default', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.writeHead(400);
+      res.end();
+    });
+    try {
+      await requestAsync({ url: server.url, retries: 2, retryDelay: 0 });
+      assert.equal(attempts, 1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('respects Retry-After zero without waiting for backoff', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.writeHead(503, { 'Retry-After': '0' });
+      res.end();
+    });
+    try {
+      const started = Date.now();
+      await requestAsync({
+        url: server.url,
+        retries: 1,
+        retryDelay: 1000,
+        retryJitter: false
+      });
+      assert.equal(attempts, 2);
+      assert.isBelow(Date.now() - started, 500);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('maps SSL connect failures to status 526', async () => {
     const server = await createLocalServer((_req, res) => res.end());
     try {

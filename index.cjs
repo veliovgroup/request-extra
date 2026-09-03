@@ -152,7 +152,19 @@ const normalizeOptions = (opts) => {
       throw new TypeError(`{opts.${key}} expecting a non-negative finite Number`);
     }
   }
+  if (!Array.isArray(normalized.retryMethods) || normalized.retryMethods.some((method) => typeof method !== 'string')) {
+    throw new TypeError('{opts.retryMethods} expecting an Array of method names');
+  }
+  if (!Number.isFinite(normalized.retryMaxDelay) || normalized.retryMaxDelay < 0) {
+    throw new TypeError('{opts.retryMaxDelay} expecting a non-negative finite Number');
+  }
+  for (const key of ['retryJitter', 'respectRetryAfter']) {
+    if (typeof normalized[key] !== 'boolean') {
+      throw new TypeError(`{opts.${key}} expecting a Boolean`);
+    }
+  }
   normalized.method = normalized.method.toUpperCase();
+  normalized.retryMethods = normalized.retryMethods.map((method) => method.toUpperCase());
   Object.defineProperties(normalized, {
     _headerLines: { value: getHeaderLines(normalized.headers) },
     _configurationError: { value: validateCurlConfiguration(normalized) }
@@ -531,6 +543,7 @@ class LibCurlRequest {
     let isBadUrl = false;
 
     this.opts = normalizeOptions(opts);
+    this.initialRetries = this.opts.retries;
 
     if (!cb && this.opts.isPromise) {
       this.promise = new Promise((resolve, reject) => {
@@ -631,16 +644,37 @@ class LibCurlRequest {
     return this;
   }
 
-  _retry() {
+  _getRetryDelay(result) {
+    if (this.opts.respectRetryAfter && result?.headers?.['retry-after']) {
+      const value = Array.isArray(result.headers['retry-after'])
+        ? result.headers['retry-after'][0]
+        : result.headers['retry-after'];
+      const seconds = Number(value);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return Math.min(seconds * 1000, this.opts.retryMaxDelay);
+      }
+      const dateDelay = Date.parse(value) - Date.now();
+      if (Number.isFinite(dateDelay) && dateDelay > 0) {
+        return Math.min(dateDelay, this.opts.retryMaxDelay);
+      }
+    }
+
+    const attempt = this.initialRetries - this.opts.retries;
+    const ceiling = Math.min(this.opts.retryDelay * (2 ** attempt), this.opts.retryMaxDelay);
+    return this.opts.retryJitter ? Math.floor(Math.random() * (ceiling + 1)) : ceiling;
+  }
+
+  _retry(result) {
     this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
-    if (this.opts.retry === true && this.opts.retries > 0) {
+    if (this.opts.retry === true && this.opts.retries > 0 && this.opts.retryMethods.includes(this.opts.method)) {
+      const delay = this._getRetryDelay(result);
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
         this.retryTimer = false;
         if (!this.finished) {
           this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
         }
-      }, this.opts.retryDelay);
+      }, delay);
       return true;
     }
     return false;
@@ -662,10 +696,10 @@ class LibCurlRequest {
 
     if (error) {
       if (!NON_RETRYABLE_ERROR_CODES.includes(error.errorCode)) {
-        isRetry = this._retry();
+        isRetry = this._retry(result);
       }
     } else if (this.opts.isBadStatus(statusCode, this.opts.badStatuses)) {
-      isRetry = this._retry();
+      isRetry = this._retry(result);
     }
 
     if (!isRetry) {
@@ -704,9 +738,11 @@ class LibCurlRequest {
       return this;
     }
 
+    const attemptBudget = (this.opts.timeout + 1000) * (this.initialRetries + 1);
+    const delayBudget = this.opts.retryMaxDelay * this.initialRetries;
     this.timeoutTimer = setTimeout(() => {
       this.abort();
-    }, ((this.opts.timeout + this.opts.retryDelay) * (this.opts.retries + 1)));
+    }, attemptBudget + delayBudget);
     this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
     return this;
   }
@@ -777,13 +813,17 @@ request.defaultOptions = {
   keepAlive: false,
   noStorage: false,
   retryDelay: 256,
+  retryMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'],
+  retryMaxDelay: 30000,
+  retryJitter: true,
+  respectRetryAfter: true,
   maxRedirects: 4,
   followRedirect: true,
   rejectUnauthorized: false,
   rejectUnauthorizedProxy: false,
-  badStatuses: [300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510],
+  badStatuses: [408, 425, 429, 500, 502, 503, 504],
   isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
-    return badStatuses.includes(statusCode) || statusCode >= 500;
+    return badStatuses.includes(statusCode);
   },
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
