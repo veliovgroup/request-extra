@@ -75,6 +75,20 @@ describe('local runtime', () => {
     }
   });
 
+  it('ignores inherited Curl options during configuration preflight', async () => {
+    const curlOptions = Object.create({ URL: 1 });
+    const server = await createLocalServer((_req, res) => {
+      res.end('local-ok');
+    });
+
+    try {
+      const response = await requestAsync({ url: server.url, curlOptions, retry: false });
+      assert.equal(response.body, 'local-ok');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('treats explicit undefined options as omitted', async () => {
     const server = await createLocalServer((req, res) => {
       res.end(req.method);
@@ -109,6 +123,32 @@ describe('local runtime', () => {
         return true;
       });
       assert.equal(error.code, 4);
+      assert.equal(error.statusCode, 500);
+      assert.equal(attempts, 0);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('preflights invalid native Curl option values without performing request', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.end();
+    });
+    try {
+      const error = await new Promise((resolve) => {
+        const requestInstance = request({
+          url: server.url,
+          wait: true,
+          retry: false,
+          curlOptions: { URL: 1 }
+        }, resolve);
+        assert.equal(requestInstance.opts._configurationError.code, 4);
+        requestInstance.send();
+      });
+      assert.equal(error.errorCode, 4);
+      assert.equal(error.status, 500);
       assert.equal(error.statusCode, 500);
       assert.equal(attempts, 0);
     } finally {

@@ -75,7 +75,12 @@ const getHeaderLines = (headers) => Object.entries(headers).map(([name, value]) 
 });
 
 const validateCurlConfiguration = (opts) => {
-  for (const [option, value] of Object.entries(opts.curlOptions || {})) {
+  const curlOptions = opts.curlOptions && typeof opts.curlOptions === 'object' ? opts.curlOptions : {};
+  const curlFeatures = opts.curlFeatures && typeof opts.curlFeatures === 'object' ? opts.curlFeatures : {};
+  const curlOptionEntries = Object.entries(curlOptions);
+  const curlFeatureEntries = Object.entries(curlFeatures);
+
+  for (const [option, value] of curlOptionEntries) {
     if (Curl.option[option] === undefined) {
       return createConfigurationError(new TypeError(`Unknown Curl option: ${option}`));
     }
@@ -83,7 +88,7 @@ const validateCurlConfiguration = (opts) => {
       return createConfigurationError(new TypeError(`Invalid Curl option value: ${option}`));
     }
   }
-  for (const [option, value] of Object.entries(opts.curlFeatures || {})) {
+  for (const [option, value] of curlFeatureEntries) {
     if (CurlFeature[option] === undefined) {
       return createConfigurationError(new TypeError(`Unknown Curl feature: ${option}`));
     }
@@ -91,6 +96,29 @@ const validateCurlConfiguration = (opts) => {
       return createConfigurationError(new TypeError(`Invalid Curl feature value: ${option}`));
     }
   }
+
+  if (!curlOptionEntries.length && !curlFeatureEntries.length) {
+    return null;
+  }
+
+  const curl = new Curl();
+  try {
+    for (const [option, value] of curlOptionEntries) {
+      curl.setOpt(Curl.option[option], value);
+    }
+    for (const [option, value] of curlFeatureEntries) {
+      if (value) {
+        curl.enable(CurlFeature[option]);
+      } else {
+        curl.disable(CurlFeature[option]);
+      }
+    }
+  } catch (error) {
+    return createConfigurationError(error);
+  } finally {
+    closeCurl(curl);
+  }
+
   return null;
 };
 
