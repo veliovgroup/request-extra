@@ -6,8 +6,8 @@ const fs = require('node:fs');
 const node_url = require('node:url');
 const nodeLibcurl = require('node-libcurl');
 
-const SSL_ERROR_CODES = [58, 60, 83, 90, 91];
-const CURL_ERROR_CODES = [3, 4, 23, 47];
+const SSL_ERROR_CODES = [35, 58, 60, 83, 90, 91];
+const NON_RETRYABLE_ERROR_CODES = [3, 4, 23, 42, 43, 47];
 
 const badUrlError = {
   code: 3,
@@ -172,6 +172,7 @@ const sendRequest = (libcurl, url, cb) => {
   closeCurl(libcurl.curl);
 
   const curl = new nodeLibcurl.Curl();
+  libcurl.curl = curl;
   let finished = false;
   let pipeError = null;
   let timeoutTimer = null;
@@ -443,6 +444,8 @@ const sendRequest = (libcurl, url, cb) => {
       } catch (e) {
         libcurl._debug('Can\'t stringify opts.form in POST request:', url.href, e);
         finished = true;
+        stopRequestTimeout();
+        libcurl._stopRequestTimeout();
         process.nextTick(() => {
           libcurl.finished = true;
           curl.close();
@@ -627,7 +630,10 @@ class LibCurlRequest {
     if (this.opts.retry === true && this.opts.retries > 0) {
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
-        this.currentCurl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+        this.retryTimer = false;
+        if (!this.finished) {
+          this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+        }
       }, this.opts.retryDelay);
       return true;
     }
@@ -635,6 +641,9 @@ class LibCurlRequest {
   }
 
   _sendRequestCallback(error, result) {
+    if (this.finished) {
+      return;
+    }
     this._debug('[_sendRequestCallback]', this.opts.url);
     let isRetry = false;
     let statusCode = 408;
@@ -646,10 +655,10 @@ class LibCurlRequest {
     }
 
     if (error) {
-      if (!CURL_ERROR_CODES.includes(error.errorCode)) {
+      if (!NON_RETRYABLE_ERROR_CODES.includes(error.errorCode)) {
         isRetry = this._retry();
       }
-    } else if (this.opts.isBadStatus(statusCode, this.opts.badStatuses) && this.opts.retry === true && this.opts.retries > 1) {
+    } else if (this.opts.isBadStatus(statusCode, this.opts.badStatuses)) {
       isRetry = this._retry();
     }
 

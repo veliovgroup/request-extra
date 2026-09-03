@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import strictAssert from 'node:assert/strict';
 import { describe, it } from 'mocha';
 import request, { requestAsync } from '../index.js';
-import { createLocalServer } from './helpers/local-server.js';
+import { createLocalServer, waitFor } from './helpers/local-server.js';
 
 describe('local runtime', () => {
   it('exports callback and async request functions', () => {
@@ -155,5 +155,93 @@ describe('local runtime', () => {
     } finally {
       await server.close();
     }
+  });
+
+  it('treats retries as additional attempts for HTTP statuses', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.writeHead(500);
+      res.end('retry');
+    });
+    try {
+      const response = await requestAsync({
+        url: server.url,
+        retries: 1,
+        retryDelay: 0
+      });
+      assert.equal(response.statusCode, 500);
+      assert.equal(attempts, 2);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('maps SSL connect failures to status 526', async () => {
+    const server = await createLocalServer((_req, res) => res.end());
+    try {
+      let error;
+      await strictAssert.rejects(requestAsync({
+        url: server.url.replace('http:', 'https:'),
+        rejectUnauthorized: false,
+        retry: false
+      }), (caught) => {
+        error = caught;
+        return true;
+      });
+      assert.equal(error.code, 35);
+      assert.equal(error.statusCode, 526);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('closes active retry handle when aborted', async () => {
+    let attempts = 0;
+    let activeRequest;
+    let callbackCalls = 0;
+    let callbackError;
+    const server = await createLocalServer((incoming) => {
+      attempts++;
+      if (attempts === 1) {
+        incoming.socket.destroy();
+      } else {
+        activeRequest = incoming;
+      }
+    });
+
+    try {
+      const req = request({
+        url: server.url,
+        retries: 1,
+        retryDelay: 5,
+        timeout: 2000
+      }, (error) => {
+        callbackCalls++;
+        callbackError = error;
+      });
+      await waitFor(() => attempts === 2);
+      req.abort();
+      await waitFor(() => activeRequest.destroyed);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      assert.isTrue(activeRequest.destroyed);
+      assert.equal(callbackCalls, 1);
+      assert.equal(callbackError.code, 42);
+    } finally {
+      activeRequest?.destroy();
+      await server.close();
+    }
+  });
+
+  it('does not retain timers after request-body serialization fails', async () => {
+    const { spawn } = await import('node:child_process');
+    const started = Date.now();
+    const child = spawn(process.execPath, ['test/fixtures/circular-form.js'], {
+      cwd: process.cwd(),
+      stdio: 'inherit'
+    });
+    const exitCode = await new Promise((resolve) => child.once('exit', resolve));
+    assert.equal(exitCode, 0);
+    assert.isBelow(Date.now() - started, 1000);
   });
 });
