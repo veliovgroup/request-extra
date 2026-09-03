@@ -1,30 +1,40 @@
 {
   "name": "request-libcurl",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "description": "Extremely stable HTTP request module built on top of libcurl",
-  "main": "index.js",
+  "main": "./index.cjs",
   "types": "./index.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js",
-      "require": "./index.cjs"
+      "import": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      },
+      "require": {
+        "types": "./index.d.cts",
+        "default": "./index.cjs"
+      }
     }
   },
   "files": [
     "index.js",
     "index.cjs",
     "index.d.ts",
-    "docs/platform-notes.md"
+    "index.d.cts"
   ],
   "scripts": {
     "build": "rollup --config rollup.config.js",
     "prepack": "npm run build",
-    "test": "npm run test:node && npm run test:types",
-    "test:node": "mocha ./test/npm.js",
-    "test:types": "tsc -p test/tsconfig.node.json --noEmit && tsc -p test/tsconfig.bun.json --noEmit",
-    "test:bun": "bun test ./test/bun.test.js"
+    "test": "npm run test:local && npm run test:types",
+    "test:local": "cross-env SKIP_EXTERNAL=true mocha ./test/npm.js ./test/local.js",
+    "test:external": "mocha ./test/npm.js",
+    "test:types": "tsc -p test/tsconfig.node.json --noEmit && tsc -p test/tsconfig.node-cjs.json --noEmit && tsc -p test/tsconfig.bun.json --noEmit",
+    "test:bun": "bun test ./test/bun.test.js",
+    "test:packed": "node ./test/packed-package.mjs",
+    "lint": "eslint .",
+    "lint:package": "publint",
+    "test:package": "npm run test:packed && attw --pack ."
   },
   "repository": {
     "type": "git",
@@ -76,8 +86,14 @@
   },
   "homepage": "https://github.com/veliovgroup/request-extra#readme",
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@eslint/js": "^10.0.1",
     "chai": "^6.2.2",
+    "cross-env": "^10.1.0",
+    "eslint": "^10.9.1",
+    "globals": "^17.12.0",
     "mocha": "^12.0.0",
+    "publint": "^0.3.24",
     "rollup": "^4.63.1",
     "typescript": "^7.0.2"
   },

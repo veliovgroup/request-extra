@@ -6,11 +6,12 @@ import request, { requestAsync } from '../index.js';
 import querystring from 'node:querystring';
 
 import { assert } from 'chai';
-import { after, it, describe } from 'mocha';
+import { after, before, it, describe } from 'mocha';
 
-const PORT = parseInt(process.env.PORT || 3003);
+const PORT = parseInt(process.env.PORT || 0);
 const DEBUG = (process.env.DEBUG === 'true') ? true : false;
-const TEST_URL = `http://127.0.0.1:${PORT}`;
+let TEST_URL;
+const externalIt = process.env.SKIP_EXTERNAL === 'true' ? it.skip : it;
 
 request.defaultOptions.debug = DEBUG;
 
@@ -91,8 +92,16 @@ const server = http.createServer(function (req, res) {
       }
     }
   });
-}).listen(PORT);
-server.keepAliveTimeout = 0;
+});
+
+before((done) => {
+  server.listen(PORT, '127.0.0.1', () => {
+    const { port } = server.address();
+    TEST_URL = `http://127.0.0.1:${port}`;
+    server.keepAliveTimeout = 0;
+    done();
+  });
+});
 
 after((done) => {
   server.close(done);
@@ -131,7 +140,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/IP-ADDRESS', (done) => {
+    externalIt('GET/HTTP/IP-ADDRESS', (done) => {
       request({
         url: 'http://1.1.1.1'
       }, (error, resp) => {
@@ -146,7 +155,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/IP-ADDRESS', (done) => {
+    externalIt('GET/HTTPS/IP-ADDRESS', (done) => {
       request({
         url: 'https://1.1.1.1'
       }, (error, resp) => {
@@ -160,7 +169,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('DELETE/HTTP/httpbin', (done) => {
+    externalIt('DELETE/HTTP/httpbin', (done) => {
       request({
         method: 'DELETE',
         url: 'http://httpbin.org/delete'
@@ -178,7 +187,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('DELETE/HTTPS/httpbin', (done) => {
+    externalIt('DELETE/HTTPS/httpbin', (done) => {
       request({
         method: 'DELETE',
         url: 'https://httpbin.org/delete'
@@ -196,7 +205,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin', (done) => {
+    externalIt('GET/HTTP/httpbin', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/get'
@@ -214,7 +223,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin', (done) => {
+    externalIt('GET/HTTPS/httpbin', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/get'
@@ -232,7 +241,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PATCH/HTTP/httpbin', (done) => {
+    externalIt('PATCH/HTTP/httpbin', (done) => {
       request({
         method: 'PATCH',
         url: 'http://httpbin.org/patch'
@@ -250,7 +259,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PATCH/HTTPS/httpbin', (done) => {
+    externalIt('PATCH/HTTPS/httpbin', (done) => {
       request({
         method: 'PATCH',
         url: 'https://httpbin.org/patch'
@@ -269,7 +278,7 @@ describe('LibCurlRequest', function () {
     });
 
     const httpbinPostForm = { sampleKey: 'sampleValue' };
-    it('POST/HTTP/httpbin/urlencoded', (done) => {
+    externalIt('POST/HTTP/httpbin/urlencoded', (done) => {
       request({
         method: 'POST',
         url: 'http://httpbin.org/post',
@@ -290,7 +299,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('POST/HTTPS/httpbin/urlencoded', (done) => {
+    externalIt('POST/HTTPS/httpbin/urlencoded', (done) => {
       request({
         method: 'POST',
         url: 'https://httpbin.org/post',
@@ -311,7 +320,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('POST/HTTP/httpbin/json', (done) => {
+    externalIt('POST/HTTP/httpbin/json', (done) => {
       request({
         method: 'POST',
         url: 'http://httpbin.org/post',
@@ -333,7 +342,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('POST/HTTPS/httpbin/json', (done) => {
+    externalIt('POST/HTTPS/httpbin/json', (done) => {
       request({
         method: 'POST',
         url: 'https://httpbin.org/post',
@@ -355,7 +364,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('POST/HTTP/httpbin/text/plain', (done) => {
+    externalIt('POST/HTTP/httpbin/text/plain', (done) => {
       request({
         method: 'POST',
         url: 'http://httpbin.org/post',
@@ -380,7 +389,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('POST/HTTPS/httpbin/text/plain', (done) => {
+    externalIt('POST/HTTPS/httpbin/text/plain', (done) => {
       request({
         method: 'POST',
         url: 'https://httpbin.org/post',
@@ -406,7 +415,7 @@ describe('LibCurlRequest', function () {
     });
 
     const httpbinPutForm = { samplePutKey: 'samplePutValue' };
-    it('PUT/HTTP/httpbin/urlencoded', (done) => {
+    externalIt('PUT/HTTP/httpbin/urlencoded', (done) => {
       request({
         method: 'PUT',
         url: 'http://httpbin.org/put',
@@ -427,7 +436,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PUT/HTTPS/httpbin/urlencoded', (done) => {
+    externalIt('PUT/HTTPS/httpbin/urlencoded', (done) => {
       request({
         method: 'PUT',
         url: 'https://httpbin.org/put',
@@ -448,7 +457,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PUT/HTTP/httpbin/json', (done) => {
+    externalIt('PUT/HTTP/httpbin/json', (done) => {
       request({
         method: 'PUT',
         url: 'http://httpbin.org/put',
@@ -470,7 +479,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PUT/HTTPS/httpbin/json', (done) => {
+    externalIt('PUT/HTTPS/httpbin/json', (done) => {
       request({
         method: 'PUT',
         url: 'https://httpbin.org/put',
@@ -492,7 +501,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PUT/HTTP/httpbin/text/plain', (done) => {
+    externalIt('PUT/HTTP/httpbin/text/plain', (done) => {
       request({
         method: 'PUT',
         url: 'http://httpbin.org/put',
@@ -517,7 +526,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('PUT/HTTPS/httpbin/text/plain', (done) => {
+    externalIt('PUT/HTTPS/httpbin/text/plain', (done) => {
       request({
         method: 'PUT',
         url: 'https://httpbin.org/put',
@@ -542,7 +551,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/basic-auth', (done) => {
+    externalIt('GET/HTTP/httpbin/basic-auth', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/basic-auth/uuuussssrrrr/ppppwwwwdddd',
@@ -562,7 +571,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/basic-auth', (done) => {
+    externalIt('GET/HTTPS/httpbin/basic-auth', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/basic-auth/uuuussssrrrr/ppppwwwwdddd',
@@ -582,7 +591,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/hidden-basic-auth', (done) => {
+    externalIt('GET/HTTP/httpbin/hidden-basic-auth', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/hidden-basic-auth/uuuussssrrrr/ppppwwwwdddd',
@@ -602,7 +611,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/hidden-basic-auth', (done) => {
+    externalIt('GET/HTTPS/httpbin/hidden-basic-auth', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/hidden-basic-auth/uuuussssrrrr/ppppwwwwdddd',
@@ -622,7 +631,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/brotli', (done) => {
+    externalIt('GET/HTTP/httpbin/brotli', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/brotli'
@@ -644,7 +653,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/brotli', (done) => {
+    externalIt('GET/HTTPS/httpbin/brotli', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/brotli'
@@ -666,7 +675,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/deflate', (done) => {
+    externalIt('GET/HTTP/httpbin/deflate', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/deflate'
@@ -684,7 +693,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/deflate', (done) => {
+    externalIt('GET/HTTPS/httpbin/deflate', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/deflate'
@@ -702,7 +711,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/gzip', (done) => {
+    externalIt('GET/HTTP/httpbin/gzip', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/gzip'
@@ -720,7 +729,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/gzip', (done) => {
+    externalIt('GET/HTTPS/httpbin/gzip', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/gzip'
@@ -738,7 +747,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/absolute-redirect/4 [follow]', (done) => {
+    externalIt('GET/HTTP/httpbin/absolute-redirect/4 [follow]', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/absolute-redirect/4'
@@ -757,7 +766,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/absolute-redirect/4 [follow]', (done) => {
+    externalIt('GET/HTTPS/httpbin/absolute-redirect/4 [follow]', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/absolute-redirect/4'
@@ -776,7 +785,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/absolute-redirect/10 [follow]', (done) => {
+    externalIt('GET/HTTP/httpbin/absolute-redirect/10 [follow]', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/absolute-redirect/10'
@@ -792,7 +801,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/absolute-redirect/10 [follow]', (done) => {
+    externalIt('GET/HTTPS/httpbin/absolute-redirect/10 [follow]', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/absolute-redirect/10'
@@ -808,7 +817,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/httpbin/absolute-redirect/4 [no follow]', (done) => {
+    externalIt('GET/HTTP/httpbin/absolute-redirect/4 [no follow]', (done) => {
       request({
         method: 'GET',
         url: 'http://httpbin.org/absolute-redirect/4',
@@ -829,7 +838,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/httpbin/absolute-redirect/4 [no follow]', (done) => {
+    externalIt('GET/HTTPS/httpbin/absolute-redirect/4 [no follow]', (done) => {
       request({
         method: 'GET',
         url: 'https://httpbin.org/absolute-redirect/4',
@@ -1110,7 +1119,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/IDN', (done) => {
+    externalIt('GET/HTTP/IDN', (done) => {
       request({
         url: 'http://яндекс.рф' //xn--d1acpjx3f.xn--p1ai
       }, (error, resp) => {
@@ -1123,7 +1132,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/IDN', (done) => {
+    externalIt('GET/HTTPS/IDN', (done) => {
       request({
         url: 'https://i❤️.ws', //xn--i-7iq.ws
         rejectUnauthorized: true,
@@ -1138,7 +1147,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTP/T-IDN', (done) => {
+    externalIt('GET/HTTP/T-IDN', (done) => {
       request({
         url: 'http://xn--d1acpjx3f.xn--p1ai' //яндекс.рф
       }, (error, resp) => {
@@ -1151,7 +1160,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/T-IDN', (done) => {
+    externalIt('GET/HTTPS/T-IDN', (done) => {
       request({
         url: 'https://xn--i-7iq.ws', //i❤️.ws
         rejectUnauthorized: true,
@@ -1411,7 +1420,7 @@ describe('LibCurlRequest', function () {
   });
 
   describe('HTTPS/HANDLE ERRORS', () => {
-    it('GET/HTTPS/ERROR/EXPIRED [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/EXPIRED [no reject]', (done) => {
       request({
         url: 'https://expired.badssl.com/',
         rejectUnauthorized: false
@@ -1424,7 +1433,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/EXPIRED [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/EXPIRED [reject]', (done) => {
       request({
         url: 'https://expired.badssl.com/',
         rejectUnauthorized: true
@@ -1440,7 +1449,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/WRONG HOST [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/WRONG HOST [no reject]', (done) => {
       request({
         url: 'https://wrong.host.badssl.com/',
         rejectUnauthorized: false
@@ -1453,7 +1462,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/WRONG HOST [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/WRONG HOST [reject]', (done) => {
       request({
         url: 'https://wrong.host.badssl.com/',
         rejectUnauthorized: true
@@ -1469,7 +1478,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/SELF-SIGNED [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/SELF-SIGNED [no reject]', (done) => {
       request({
         url: 'https://self-signed.badssl.com/',
         rejectUnauthorized: false
@@ -1482,7 +1491,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/SELF-SIGNED [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/SELF-SIGNED [reject]', (done) => {
       request({
         url: 'https://self-signed.badssl.com/',
         rejectUnauthorized: true
@@ -1498,7 +1507,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/UNTRUSTED-ROOT [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/UNTRUSTED-ROOT [no reject]', (done) => {
       request({
         url: 'https://untrusted-root.badssl.com/',
         rejectUnauthorized: false
@@ -1511,7 +1520,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/UNTRUSTED-ROOT [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/UNTRUSTED-ROOT [reject]', (done) => {
       request({
         url: 'https://untrusted-root.badssl.com/',
         rejectUnauthorized: true
@@ -1527,7 +1536,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/REVOKED [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/REVOKED [no reject]', (done) => {
       request({
         url: 'https://revoked.badssl.com/',
         rejectUnauthorized: false
@@ -1540,7 +1549,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/REVOKED [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/REVOKED [reject]', (done) => {
       request({
         url: 'https://revoked.badssl.com/',
         rejectUnauthorized: true,
@@ -1563,7 +1572,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/PINNING [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/PINNING [no reject]', (done) => {
       request({
         url: 'https://pinning-test.badssl.com/',
         rejectUnauthorized: false
@@ -1576,7 +1585,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/PINNING [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/PINNING [reject]', (done) => {
       request({
         url: 'https://pinning-test.badssl.com/',
         rejectUnauthorized: true,
@@ -1600,7 +1609,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/no-common-name [no reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/no-common-name [no reject]', (done) => {
       request({
         url: 'https://no-common-name.badssl.com/',
         rejectUnauthorized: false
@@ -1613,7 +1622,7 @@ describe('LibCurlRequest', function () {
       });
     });
 
-    it('GET/HTTPS/ERROR/no-common-name [reject]', (done) => {
+    externalIt('GET/HTTPS/ERROR/no-common-name [reject]', (done) => {
       request({
         url: 'https://no-common-name.badssl.com/',
         rejectUnauthorized: true
@@ -1647,10 +1656,8 @@ describe('ASYNC LibCurlRequest', function () {
       });
 
       assert.equal(req.finished, false, '.finished is false');
-      const waitForAbort = new Promise(async (resolve) => {
-        await req.abortAsync();
+      const waitForAbort = req.abortAsync().then(() => {
         assert.equal(req.finished, true, '.finished is true');
-        resolve();
       });
 
       req.send();
@@ -1666,7 +1673,7 @@ describe('ASYNC LibCurlRequest', function () {
       }
     });
 
-    it('requestAsync: GET/HTTP/IP-ADDRESS', async () => {
+    externalIt('requestAsync: GET/HTTP/IP-ADDRESS', async () => {
       const resp = await requestAsync({
         url: 'http://1.1.1.1'
       });
@@ -1679,7 +1686,7 @@ describe('ASYNC LibCurlRequest', function () {
       assert.equal(resp.headers.location, 'https://one.one.one.one/', 'Correct location header');
     });
 
-    it('"wait" requestAsync/sendAsync: GET/HTTP/IP-ADDRESS', async () => {
+    externalIt('"wait" requestAsync/sendAsync: GET/HTTP/IP-ADDRESS', async () => {
       const req = await requestAsync({
         url: 'http://1.1.1.1',
         wait: true

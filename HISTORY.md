@@ -1,1 +1,1 @@
-See full history at [releases on GitHub](https://github.com/veliovgroup/request-extra/releases)
+See full history at [releases on GitHub](https://github.com/veliovgroup/request-extra/releases).

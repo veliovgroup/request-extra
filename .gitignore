@@ -1,5 +1,11 @@
-.npm
+.npm/
 .DS_Store
+Thumbs.db
 .eslintcache
-node_modules
-npm-debug.log*
+.idea/
+.vscode/
+coverage/
+node_modules/
+*.log
+*.tgz
+docs/superpowers/

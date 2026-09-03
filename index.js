@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import { URL } from 'node:url';
-import { Curl, CurlFeature } from 'node-libcurl';
-const SSL_ERROR_CODES = [58, 60, 83, 90, 91];
-const CURL_ERROR_CODES = [3, 4, 23, 47];
+import { Curl, CurlFeature, CurlPause } from 'node-libcurl';
+const SSL_ERROR_CODES = [35, 58, 60, 83, 90, 91];
+const NON_RETRYABLE_ERROR_CODES = [3, 4, 23, 42, 43, 47];
 
 const badUrlError = {
   code: 3,
@@ -37,6 +37,15 @@ const createPipeError = (cause) => {
   return error;
 };
 
+const createConfigurationError = (cause) => {
+  const error = new Error('500: Invalid Curl configuration', { cause });
+  error.code = 4;
+  error.status = 500;
+  error.errorCode = 4;
+  error.statusCode = 500;
+  return error;
+};
+
 const noop = () => {};
 
 const _debug = (...args) => {
@@ -53,13 +62,177 @@ const closeCurl = (curl) => {
   }
 };
 
+const HTTP_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+const getHeaderLines = (headers) => Object.entries(headers).map(([name, value]) => {
+  if (!HTTP_TOKEN.test(name)) {
+    throw new TypeError(`Invalid HTTP header name: "${name}"`);
+  }
+  if (value !== null && value !== undefined && !['string', 'number', 'boolean'].includes(typeof value)) {
+    throw new TypeError(`Invalid HTTP header value type for "${name}"`);
+  }
+  if (value !== null && value !== undefined && value !== false && /[\r\n]/.test(String(value))) {
+    throw new TypeError(`Invalid HTTP header value for "${name}"`);
+  }
+  return [name, value];
+});
+
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isWritableLike = (value) => isRecord(value)
+  && typeof value.write === 'function'
+  && typeof value.end === 'function';
+
+const validateCurlConfiguration = (opts) => {
+  const curlOptions = opts.curlOptions && typeof opts.curlOptions === 'object' ? opts.curlOptions : {};
+  const curlFeatures = opts.curlFeatures && typeof opts.curlFeatures === 'object' ? opts.curlFeatures : {};
+  const curlOptionEntries = Object.entries(curlOptions);
+  const curlFeatureEntries = Object.entries(curlFeatures);
+
+  for (const [option, value] of curlOptionEntries) {
+    if (Curl.option[option] === undefined) {
+      return createConfigurationError(new TypeError(`Unknown Curl option: ${option}`));
+    }
+    if (option === 'TIMEOUT_MS' && (!Number.isFinite(value) || value < 0)) {
+      return createConfigurationError(new TypeError(`Invalid Curl option value: ${option}`));
+    }
+  }
+  for (const [option, value] of curlFeatureEntries) {
+    if (CurlFeature[option] === undefined) {
+      return createConfigurationError(new TypeError(`Unknown Curl feature: ${option}`));
+    }
+    if (typeof value !== 'boolean') {
+      return createConfigurationError(new TypeError(`Invalid Curl feature value: ${option}`));
+    }
+  }
+
+  if (!curlOptionEntries.length && !curlFeatureEntries.length) {
+    return null;
+  }
+
+  const curl = new Curl();
+  try {
+    for (const [option, value] of curlOptionEntries) {
+      curl.setOpt(Curl.option[option], value);
+    }
+    for (const [option, value] of curlFeatureEntries) {
+      if (value) {
+        curl.enable(CurlFeature[option]);
+      } else {
+        curl.disable(CurlFeature[option]);
+      }
+    }
+  } catch (error) {
+    return createConfigurationError(error);
+  } finally {
+    closeCurl(curl);
+  }
+
+  return null;
+};
+
+const normalizeOptions = (opts) => {
+  if (!opts || typeof opts !== 'object' || Array.isArray(opts)) {
+    throw new TypeError('{opts} expecting an Object as first argument');
+  }
+
+  const definedOptions = Object.fromEntries(
+    Object.entries(opts).filter(([, value]) => value !== undefined)
+  );
+  const normalized = {
+    ...request.defaultOptions,
+    ...definedOptions
+  };
+
+  for (const key of ['url', 'uri', 'auth']) {
+    if (normalized[key] !== undefined && typeof normalized[key] !== 'string') {
+      throw new TypeError(`{opts.${key}} expecting a String`);
+    }
+  }
+  if (normalized.form !== undefined && (normalized.form === null || !['string', 'object'].includes(typeof normalized.form))) {
+    throw new TypeError('{opts.form} expecting a String or Object');
+  }
+  if (normalized.upload !== undefined && !Number.isFinite(normalized.upload)) {
+    throw new TypeError('{opts.upload} expecting a finite Number');
+  }
+  if (normalized.pipeTo !== undefined && !isWritableLike(normalized.pipeTo)) {
+    throw new TypeError('[request-libcurl] {opts.pipeTo} option expected to be {stream.Writable}');
+  }
+  if (!isRecord(normalized.headers)) {
+    throw new TypeError('{opts.headers} expecting an Object');
+  }
+  if (!isRecord(normalized.curlOptions) && normalized.curlOptions !== undefined) {
+    throw new TypeError('{opts.curlOptions} expecting an Object');
+  }
+  if (!isRecord(normalized.curlFeatures) && normalized.curlFeatures !== undefined) {
+    throw new TypeError('{opts.curlFeatures} expecting an Object');
+  }
+  if (typeof normalized.method !== 'string' || !normalized.method.trim()) {
+    throw new TypeError('{opts.method} expecting a non-empty String');
+  }
+  for (const key of ['timeout', 'retryDelay', 'maxRedirects', 'retries']) {
+    if (!Number.isFinite(normalized[key]) || normalized[key] < 0) {
+      throw new TypeError(`{opts.${key}} expecting a non-negative finite Number`);
+    }
+  }
+  if (!Array.isArray(normalized.retryMethods) || normalized.retryMethods.some((method) => typeof method !== 'string')) {
+    throw new TypeError('{opts.retryMethods} expecting an Array of method names');
+  }
+  if (!Number.isFinite(normalized.retryMaxDelay) || normalized.retryMaxDelay < 0) {
+    throw new TypeError('{opts.retryMaxDelay} expecting a non-negative finite Number');
+  }
+  for (const key of [
+    'debug',
+    'retry',
+    'retryJitter',
+    'respectRetryAfter',
+    'keepAlive',
+    'followRedirect',
+    'rawBody',
+    'noStorage',
+    'wait',
+    'rejectUnauthorized',
+    'rejectUnauthorizedProxy'
+  ]) {
+    if (typeof normalized[key] !== 'boolean') {
+      throw new TypeError(`{opts.${key}} expecting a Boolean`);
+    }
+  }
+  if (!Array.isArray(normalized.badStatuses) || normalized.badStatuses.some((status) => !Number.isFinite(status))) {
+    throw new TypeError('{opts.badStatuses} expecting an Array of status numbers');
+  }
+  if (typeof normalized.isBadStatus !== 'function') {
+    throw new TypeError('{opts.isBadStatus} expecting a Function');
+  }
+  if (typeof normalized.proxy !== 'string' && typeof normalized.proxy !== 'boolean') {
+    throw new TypeError('{opts.proxy} expecting a String or Boolean');
+  }
+  normalized.method = normalized.method.toUpperCase();
+  normalized.retryMethods = normalized.retryMethods.map((method) => method.toUpperCase());
+  normalized.headers = {
+    ...request.defaultOptions.headers,
+    ...(definedOptions.headers || {})
+  };
+  Object.defineProperties(normalized, {
+    _headerLines: { value: getHeaderLines(normalized.headers) },
+    _configurationError: { value: validateCurlConfiguration(normalized) }
+  });
+  return normalized;
+};
+
 const sendRequest = (libcurl, url, cb) => {
   libcurl._debug('[sendRequest]', url.href);
 
+  const opts = libcurl.opts;
+  if (opts._configurationError) {
+    process.nextTick(() => cb(opts._configurationError));
+    return null;
+  }
+
+  libcurl._stopAttemptTimeout?.();
   closeCurl(libcurl.curl);
 
   const curl = new Curl();
-  const opts = libcurl.opts;
+  libcurl.curl = curl;
   let finished = false;
   let pipeError = null;
   let timeoutTimer = null;
@@ -67,13 +240,79 @@ const sendRequest = (libcurl, url, cb) => {
   let hasContentType = false;
   let hasContentLength = false;
   let hasAcceptEncoding = false;
+  let configurationError = null;
+  const blockedStreams = new Set();
+  const streamErrorListeners = new Map();
+  const streamDrainListeners = new Map();
 
-  const stopRequestTimeout = () => {
+  const stopAttemptTimeout = () => {
     if (timeoutTimer) {
       clearTimeout(timeoutTimer);
       timeoutTimer = null;
     }
+    if (libcurl._stopAttemptTimeout === stopAttemptTimeout) {
+      libcurl._stopAttemptTimeout = noop;
+    }
   };
+  libcurl._stopAttemptTimeout = stopAttemptTimeout;
+
+  const removeStreamListener = (writableStream, event, listener) => {
+    if (listener && typeof writableStream.removeListener === 'function') {
+      writableStream.removeListener(event, listener);
+    }
+  };
+
+  const cleanupStreamListeners = () => {
+    for (const [writableStream, listener] of streamErrorListeners) {
+      removeStreamListener(writableStream, 'error', listener);
+    }
+    for (const [writableStream, listener] of streamDrainListeners) {
+      removeStreamListener(writableStream, 'drain', listener);
+    }
+    streamErrorListeners.clear();
+    streamDrainListeners.clear();
+    blockedStreams.clear();
+    if (libcurl._cleanupPipeListeners === cleanupStreamListeners) {
+      libcurl._cleanupPipeListeners = noop;
+    }
+  };
+
+  const cleanupStreamDrainListeners = () => {
+    for (const [writableStream, listener] of streamDrainListeners) {
+      removeStreamListener(writableStream, 'drain', listener);
+    }
+    streamDrainListeners.clear();
+    blockedStreams.clear();
+  };
+
+  const failPipe = (cause) => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    stopAttemptTimeout();
+    libcurl._stopRequestTimeout();
+    pipeError = createPipeError(cause);
+    cleanupStreamListeners();
+    setImmediate(() => {
+      closeCurl(curl);
+      cb(pipeError);
+    });
+  };
+
+  const resumeAfterDrain = (writableStream) => {
+    blockedStreams.delete(writableStream);
+    streamDrainListeners.delete(writableStream);
+    if (!blockedStreams.size && !finished) {
+      try {
+        curl.pause(CurlPause.Cont);
+      } catch (error) {
+        failPipe(error);
+      }
+    }
+  };
+
+  libcurl._cleanupPipeListeners = cleanupStreamListeners;
 
   timeoutTimer = setTimeout(() => {
     libcurl.abort();
@@ -137,24 +376,21 @@ const sendRequest = (libcurl, url, cb) => {
 
   const customHeaders = [];
 
-  let lcHeader = '';
-  for (let header in opts.headers) {
-    if (typeof header === 'string') {
-      lcHeader = header.toLowerCase();
-      if (lcHeader === 'content-type') {
-        hasContentType = true;
-      } else if (lcHeader === 'content-length') {
-        hasContentLength = true;
-      } else if (lcHeader === 'accept-encoding') {
-        hasAcceptEncoding = opts.headers[header];
-      }
-      if (opts.headers[header] === void 0 || opts.headers[header] === null || opts.headers[header] === false) {
-        // UNSET DEFAULT HEADERS
-        customHeaders.push(`${header}: `);
-      } else {
-        // SET CUSTOM HEADERS
-        customHeaders.push(`${header}: ${opts.headers[header]}`);
-      }
+  for (const [header, value] of opts._headerLines) {
+    const lcHeader = header.toLowerCase();
+    if (lcHeader === 'content-type') {
+      hasContentType = true;
+    } else if (lcHeader === 'content-length') {
+      hasContentLength = true;
+    } else if (lcHeader === 'accept-encoding') {
+      hasAcceptEncoding = value;
+    }
+    if (value === undefined || value === null || value === false) {
+      // UNSET DEFAULT HEADERS
+      customHeaders.push(`${header}: `);
+    } else {
+      // SET CUSTOM HEADERS
+      customHeaders.push(`${header}: ${value}`);
     }
   }
 
@@ -174,9 +410,27 @@ const sendRequest = (libcurl, url, cb) => {
     curl.on('header', libcurl._onHeader);
   }
 
+  if (libcurl.pipeTo && libcurl.pipeTo.length) {
+    for (const writableStream of libcurl.pipeTo) {
+      if (typeof writableStream.once === 'function') {
+        const onStreamError = (error) => {
+          streamErrorListeners.delete(writableStream);
+          failPipe(error);
+        };
+        streamErrorListeners.set(writableStream, onStreamError);
+        try {
+          writableStream.once('error', onStreamError);
+        } catch (error) {
+          failPipe(error);
+          break;
+        }
+      }
+    }
+  }
+
   if ((libcurl.pipeTo && libcurl.pipeTo.length) || libcurl._onData) {
     curl.on('data', (data) => {
-      if (!data) {
+      if (!data || finished) {
         return;
       }
 
@@ -188,10 +442,18 @@ const sendRequest = (libcurl, url, cb) => {
         for (const writableStream of libcurl.pipeTo) {
           if (!writableStream.destroyed) {
             try {
-              writableStream.write(data);
+              const canContinue = writableStream.write(data);
+              if (canContinue === false && typeof writableStream.once === 'function' && !blockedStreams.has(writableStream)) {
+                const onDrain = () => resumeAfterDrain(writableStream);
+                blockedStreams.add(writableStream);
+                streamDrainListeners.set(writableStream, onDrain);
+                writableStream.once('drain', onDrain);
+                curl.pause(CurlPause.Recv);
+              }
             } catch (writableStreamError) {
               libcurl._debug('writableStream.write(data) throw an exception', writableStreamError);
-              pipeError ||= createPipeError(writableStreamError);
+              failPipe(writableStreamError);
+              return;
             }
           }
         }
@@ -201,7 +463,7 @@ const sendRequest = (libcurl, url, cb) => {
 
   curl.on('end', (statusCode, body, _headers) => {
     libcurl._debug('[END EVENT]', opts.retries, url.href, finished, statusCode);
-    stopRequestTimeout();
+    stopAttemptTimeout();
     curl.removeAllListeners();
     if (finished) { return; }
     finished = true;
@@ -213,9 +475,9 @@ const sendRequest = (libcurl, url, cb) => {
     const lastHeadersIndex = _headers.length - 1;
     if (_headers && _headers.length && _headers[lastHeadersIndex]) {
       delete _headers[lastHeadersIndex].result;
-      for (let headerName in _headers[lastHeadersIndex]) {
-        if (_headers[lastHeadersIndex][headerName]) {
-          headers[headerName.toLowerCase()] = _headers[lastHeadersIndex][headerName];
+      for (const [headerName, value] of Object.entries(_headers[lastHeadersIndex])) {
+        if (value) {
+          headers[headerName.toLowerCase()] = value;
         }
       }
     }
@@ -223,13 +485,17 @@ const sendRequest = (libcurl, url, cb) => {
     // IF REDIRECT ARE FOLLOWED GET LAST `Location` HEADER
     // AND ADD IT TO THE FINAL `headers` OBJECT
     // UNLESS `.location` ALREADY EXISTS IN THE RESPONSE HEADERS' OBJECT
-    if (!headers.location && lastHeadersIndex > 0 && _headers[_headers.length - 2]) {
-      if (_headers[_headers.length - 2].Location || _headers[_headers.length - 2].location) {
-        headers.location = _headers[_headers.length - 2].Location || _headers[_headers.length - 2].location;
+    if (!Object.hasOwn(headers, 'location') && lastHeadersIndex > 0 && _headers[_headers.length - 2]) {
+      const redirectHeaders = _headers[_headers.length - 2];
+      if (Object.hasOwn(redirectHeaders, 'Location')) {
+        headers.location = redirectHeaders.Location;
+      } else if (Object.hasOwn(redirectHeaders, 'location')) {
+        headers.location = redirectHeaders.location;
       }
     }
 
     const finish = () => {
+      cleanupStreamListeners();
       curl.close();
       if (pipeError) {
         cb(pipeError);
@@ -276,11 +542,12 @@ const sendRequest = (libcurl, url, cb) => {
 
   curl.on('error', (error, errorCode) => {
     libcurl._debug('REQUEST ERROR:', opts.retries, url.href, {error, errorCode});
-    stopRequestTimeout();
+    stopAttemptTimeout();
     curl.removeAllListeners();
     if (finished) { return; }
 
     finished = true;
+    cleanupStreamDrainListeners();
     curl.close();
     let statusCode = 408;
     if (errorCode === 52) {
@@ -333,6 +600,9 @@ const sendRequest = (libcurl, url, cb) => {
       } catch (e) {
         libcurl._debug('Can\'t stringify opts.form in POST request:', url.href, e);
         finished = true;
+        stopAttemptTimeout();
+        libcurl._stopRequestTimeout();
+        cleanupStreamListeners();
         process.nextTick(() => {
           libcurl.finished = true;
           curl.close();
@@ -361,45 +631,46 @@ const sendRequest = (libcurl, url, cb) => {
   }
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
-    for (let option in opts.curlOptions) {
-      if (Curl.option[option] !== undefined) {
-        try {
-          curl.setOpt(Curl.option[option], opts.curlOptions[option]);
-        } catch (curlOptionError) {
-          curlOptionError.code = 4;
-          curlOptionError.status = 500;
-          curlOptionError.errorCode = 4;
-          curlOptionError.statusCode = 500;
-          _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, opts.curlOptions[option], {curlOptions: opts.curlOptions });
-        }
+    for (const [option, value] of Object.entries(opts.curlOptions)) {
+      try {
+        curl.setOpt(Curl.option[option], value);
+      } catch (curlOptionError) {
+        configurationError ||= createConfigurationError(curlOptionError);
+        _debug('setOpt threw an error, due to current {curlOptions}', curlOptionError, option, value, {curlOptions: opts.curlOptions });
       }
     }
   }
 
   if (opts.curlFeatures && typeof opts.curlFeatures === 'object') {
-    for (let option in opts.curlFeatures) {
-      if (CurlFeature[option] !== undefined) {
-        try {
-          if (opts.curlFeatures[option] === true) {
-            curl.enable(CurlFeature[option]);
-          } else if (opts.curlFeatures[option] === false) {
-            curl.disable(CurlFeature[option]);
-          }
-        } catch (curlFeatureError) {
-          curlFeatureError.code = 4;
-          curlFeatureError.status = 500;
-          curlFeatureError.errorCode = 4;
-          curlFeatureError.statusCode = 500;
-          _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, opts.curlFeatures[option], {curlFeatures: opts.curlFeatures });
+    for (const [option, value] of Object.entries(opts.curlFeatures)) {
+      try {
+        if (value === true) {
+          curl.enable(CurlFeature[option]);
+        } else {
+          curl.disable(CurlFeature[option]);
         }
+      } catch (curlFeatureError) {
+        configurationError ||= createConfigurationError(curlFeatureError);
+        _debug('.enable() or .disable() threw an error, due to current {curlFeatures}', curlFeatureError, option, value, {curlFeatures: opts.curlFeatures });
       }
     }
+  }
+
+  if (configurationError) {
+    finished = true;
+    stopAttemptTimeout();
+    cleanupStreamListeners();
+    process.nextTick(() => {
+      closeCurl(curl);
+      cb(configurationError);
+    });
+    return curl;
   }
 
   curl.setOpt(Curl.option.HTTPHEADER, customHeaders);
 
   process.nextTick(() => {
-    if (!libcurl.finished) {
+    if (!libcurl.finished && !finished) {
       curl.perform();
     }
   });
@@ -412,11 +683,10 @@ class LibCurlRequest {
   constructor (opts, cb) {
     let isBadUrl = false;
 
-    if (typeof opts !== 'object') {
-      throw new TypeError('{opts} expecting an Object as first argument');
-    }
+    this.opts = normalizeOptions(opts);
+    this.initialRetries = this.opts.retries;
 
-    if (!cb && opts.isPromise) {
+    if (!cb && this.opts.isPromise) {
       this.promise = new Promise((resolve, reject) => {
         this._resolve = resolve;
         this._reject = reject;
@@ -429,9 +699,8 @@ class LibCurlRequest {
     this.finished = false;
     this.retryTimer = false;
     this.timeoutTimer = null;
-
-    this.opts = { ...request.defaultOptions, ...opts, headers: { ...request.defaultOptions.headers, ...opts.headers }};
-    this.opts.method = this.opts.method.toUpperCase();
+    this._stopAttemptTimeout = noop;
+    this._cleanupPipeListeners = noop;
 
     if (this.opts.debug) {
       this._debug = _debug;
@@ -477,9 +746,9 @@ class LibCurlRequest {
       return;
     }
 
-    if (opts.pipeTo) {
-      if (opts.pipeTo.write && opts.pipeTo.end) {
-        this.pipeTo.push(opts.pipeTo);
+    if (this.opts.pipeTo) {
+      if (this.opts.pipeTo.write && this.opts.pipeTo.end) {
+        this.pipeTo.push(this.opts.pipeTo);
       } else {
         throw new TypeError('[request-libcurl] {opts.pipeTo} option expected to be {stream.Writable}');
       }
@@ -517,19 +786,46 @@ class LibCurlRequest {
     return this;
   }
 
-  _retry() {
+  _getRetryDelay(result) {
+    if (this.opts.respectRetryAfter && result?.headers?.['retry-after']) {
+      const value = Array.isArray(result.headers['retry-after'])
+        ? result.headers['retry-after'][0]
+        : result.headers['retry-after'];
+      const seconds = Number(value);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return Math.min(seconds * 1000, this.opts.retryMaxDelay);
+      }
+      const dateDelay = Date.parse(value) - Date.now();
+      if (Number.isFinite(dateDelay) && dateDelay > 0) {
+        return Math.min(dateDelay, this.opts.retryMaxDelay);
+      }
+    }
+
+    const attempt = this.initialRetries - this.opts.retries;
+    const ceiling = Math.min(this.opts.retryDelay * (2 ** attempt), this.opts.retryMaxDelay);
+    return this.opts.retryJitter ? Math.floor(Math.random() * (ceiling + 1)) : ceiling;
+  }
+
+  _retry(result) {
     this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
-    if (this.opts.retry === true && this.opts.retries > 0) {
+    if (!this.pipeTo.length && this.opts.retry === true && this.opts.retries > 0 && this.opts.retryMethods.includes(this.opts.method)) {
+      const delay = this._getRetryDelay(result);
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
-        this.currentCurl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
-      }, this.opts.retryDelay);
+        this.retryTimer = false;
+        if (!this.finished) {
+          this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+        }
+      }, delay);
       return true;
     }
     return false;
   }
 
   _sendRequestCallback(error, result) {
+    if (this.finished) {
+      return;
+    }
     this._debug('[_sendRequestCallback]', this.opts.url);
     let isRetry = false;
     let statusCode = 408;
@@ -541,15 +837,16 @@ class LibCurlRequest {
     }
 
     if (error) {
-      if (!CURL_ERROR_CODES.includes(error.errorCode)) {
-        isRetry = this._retry();
+      if (!NON_RETRYABLE_ERROR_CODES.includes(error.errorCode)) {
+        isRetry = this._retry(result);
       }
-    } else if (this.opts.isBadStatus(statusCode, this.opts.badStatuses) && this.opts.retry === true && this.opts.retries > 1) {
-      isRetry = this._retry();
+    } else if (this.opts.isBadStatus(statusCode, this.opts.badStatuses)) {
+      isRetry = this._retry(result);
     }
 
     if (!isRetry) {
       this.finished = true;
+      this._stopAttemptTimeout();
       this._stopRequestTimeout();
       if (error) {
         if (this.opts.isPromise) {
@@ -569,14 +866,25 @@ class LibCurlRequest {
 
   send() {
     this._debug('[send]', this.opts.url);
-    if (this.sent) {
+    if (this.sent || this.finished) {
       return this;
     }
 
     this.sent = true;
+    if (this.opts._configurationError) {
+      process.nextTick(() => {
+        if (!this.finished) {
+          this._sendRequestCallback(this.opts._configurationError);
+        }
+      });
+      return this;
+    }
+
+    const attemptBudget = (this.opts.timeout + 1000) * (this.initialRetries + 1);
+    const delayBudget = this.opts.retryMaxDelay * this.initialRetries;
     this.timeoutTimer = setTimeout(() => {
       this.abort();
-    }, ((this.opts.timeout + this.opts.retryDelay) * (this.opts.retries + 1)));
+    }, attemptBudget + delayBudget);
     this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
     return this;
   }
@@ -591,7 +899,9 @@ class LibCurlRequest {
 
   abort() {
     this._debug('[abort]', this.opts.url);
+    this._stopAttemptTimeout();
     this._stopRequestTimeout();
+    this._cleanupPipeListeners();
     this.curl?.removeAllListeners?.();
 
     if (this.retryTimer) {
@@ -646,13 +956,17 @@ request.defaultOptions = {
   keepAlive: false,
   noStorage: false,
   retryDelay: 256,
+  retryMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'],
+  retryMaxDelay: 30000,
+  retryJitter: true,
+  respectRetryAfter: true,
   maxRedirects: 4,
   followRedirect: true,
   rejectUnauthorized: false,
   rejectUnauthorizedProxy: false,
-  badStatuses: [300, 303, 305, 400, 407, 408, 409, 410, 500, 502, 503, 504, 510],
+  badStatuses: [408, 425, 429, 500, 502, 503, 504],
   isBadStatus(statusCode, badStatuses = request.defaultOptions.badStatuses) {
-    return badStatuses.includes(statusCode) || statusCode >= 500;
+    return badStatuses.includes(statusCode);
   },
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
