@@ -1,4 +1,4 @@
-# Platform Notes
+# Platform notes
 
 `request-libcurl` itself has no build step during consumer installation. It uses `node-libcurl`, a native addon with prebuilt binaries for supported Node.js ABI, OS, and CPU combinations.
 
