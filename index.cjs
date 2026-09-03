@@ -73,11 +73,19 @@ const getHeaderLines = (headers) => Object.entries(headers).map(([name, value]) 
   if (!HTTP_TOKEN.test(name)) {
     throw new TypeError(`Invalid HTTP header name: "${name}"`);
   }
+  if (value !== null && value !== undefined && !['string', 'number', 'boolean'].includes(typeof value)) {
+    throw new TypeError(`Invalid HTTP header value type for "${name}"`);
+  }
   if (value !== null && value !== undefined && value !== false && /[\r\n]/.test(String(value))) {
     throw new TypeError(`Invalid HTTP header value for "${name}"`);
   }
   return [name, value];
 });
+
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isWritableLike = (value) => isRecord(value)
+  && typeof value.write === 'function'
+  && typeof value.end === 'function';
 
 const validateCurlConfiguration = (opts) => {
   const curlOptions = opts.curlOptions && typeof opts.curlOptions === 'object' ? opts.curlOptions : {};
@@ -137,13 +145,32 @@ const normalizeOptions = (opts) => {
   );
   const normalized = {
     ...request.defaultOptions,
-    ...definedOptions,
-    headers: {
-      ...request.defaultOptions.headers,
-      ...(definedOptions.headers || {})
-    }
+    ...definedOptions
   };
 
+  for (const key of ['url', 'uri', 'auth']) {
+    if (normalized[key] !== undefined && typeof normalized[key] !== 'string') {
+      throw new TypeError(`{opts.${key}} expecting a String`);
+    }
+  }
+  if (normalized.form !== undefined && (normalized.form === null || !['string', 'object'].includes(typeof normalized.form))) {
+    throw new TypeError('{opts.form} expecting a String or Object');
+  }
+  if (normalized.upload !== undefined && !Number.isFinite(normalized.upload)) {
+    throw new TypeError('{opts.upload} expecting a finite Number');
+  }
+  if (normalized.pipeTo !== undefined && !isWritableLike(normalized.pipeTo)) {
+    throw new TypeError('[request-libcurl] {opts.pipeTo} option expected to be {stream.Writable}');
+  }
+  if (!isRecord(normalized.headers)) {
+    throw new TypeError('{opts.headers} expecting an Object');
+  }
+  if (!isRecord(normalized.curlOptions) && normalized.curlOptions !== undefined) {
+    throw new TypeError('{opts.curlOptions} expecting an Object');
+  }
+  if (!isRecord(normalized.curlFeatures) && normalized.curlFeatures !== undefined) {
+    throw new TypeError('{opts.curlFeatures} expecting an Object');
+  }
   if (typeof normalized.method !== 'string' || !normalized.method.trim()) {
     throw new TypeError('{opts.method} expecting a non-empty String');
   }
@@ -158,13 +185,38 @@ const normalizeOptions = (opts) => {
   if (!Number.isFinite(normalized.retryMaxDelay) || normalized.retryMaxDelay < 0) {
     throw new TypeError('{opts.retryMaxDelay} expecting a non-negative finite Number');
   }
-  for (const key of ['retryJitter', 'respectRetryAfter']) {
+  for (const key of [
+    'debug',
+    'retry',
+    'retryJitter',
+    'respectRetryAfter',
+    'keepAlive',
+    'followRedirect',
+    'rawBody',
+    'noStorage',
+    'wait',
+    'rejectUnauthorized',
+    'rejectUnauthorizedProxy'
+  ]) {
     if (typeof normalized[key] !== 'boolean') {
       throw new TypeError(`{opts.${key}} expecting a Boolean`);
     }
   }
+  if (!Array.isArray(normalized.badStatuses) || normalized.badStatuses.some((status) => !Number.isFinite(status))) {
+    throw new TypeError('{opts.badStatuses} expecting an Array of status numbers');
+  }
+  if (typeof normalized.isBadStatus !== 'function') {
+    throw new TypeError('{opts.isBadStatus} expecting a Function');
+  }
+  if (typeof normalized.proxy !== 'string' && typeof normalized.proxy !== 'boolean') {
+    throw new TypeError('{opts.proxy} expecting a String or Boolean');
+  }
   normalized.method = normalized.method.toUpperCase();
   normalized.retryMethods = normalized.retryMethods.map((method) => method.toUpperCase());
+  normalized.headers = {
+    ...request.defaultOptions.headers,
+    ...(definedOptions.headers || {})
+  };
   Object.defineProperties(normalized, {
     _headerLines: { value: getHeaderLines(normalized.headers) },
     _configurationError: { value: validateCurlConfiguration(normalized) }
@@ -228,6 +280,14 @@ const sendRequest = (libcurl, url, cb) => {
     if (libcurl._cleanupPipeListeners === cleanupStreamListeners) {
       libcurl._cleanupPipeListeners = noop;
     }
+  };
+
+  const cleanupStreamDrainListeners = () => {
+    for (const [writableStream, listener] of streamDrainListeners) {
+      removeStreamListener(writableStream, 'drain', listener);
+    }
+    streamDrainListeners.clear();
+    blockedStreams.clear();
   };
 
   const failPipe = (cause) => {
@@ -358,7 +418,10 @@ const sendRequest = (libcurl, url, cb) => {
   if (libcurl.pipeTo && libcurl.pipeTo.length) {
     for (const writableStream of libcurl.pipeTo) {
       if (typeof writableStream.once === 'function') {
-        const onStreamError = (error) => failPipe(error);
+        const onStreamError = (error) => {
+          streamErrorListeners.delete(writableStream);
+          failPipe(error);
+        };
         streamErrorListeners.set(writableStream, onStreamError);
         try {
           writableStream.once('error', onStreamError);
@@ -427,9 +490,12 @@ const sendRequest = (libcurl, url, cb) => {
     // IF REDIRECT ARE FOLLOWED GET LAST `Location` HEADER
     // AND ADD IT TO THE FINAL `headers` OBJECT
     // UNLESS `.location` ALREADY EXISTS IN THE RESPONSE HEADERS' OBJECT
-    if (!headers.location && lastHeadersIndex > 0 && _headers[_headers.length - 2]) {
-      if (_headers[_headers.length - 2].Location || _headers[_headers.length - 2].location) {
-        headers.location = _headers[_headers.length - 2].Location || _headers[_headers.length - 2].location;
+    if (!Object.hasOwn(headers, 'location') && lastHeadersIndex > 0 && _headers[_headers.length - 2]) {
+      const redirectHeaders = _headers[_headers.length - 2];
+      if (Object.hasOwn(redirectHeaders, 'Location')) {
+        headers.location = redirectHeaders.Location;
+      } else if (Object.hasOwn(redirectHeaders, 'location')) {
+        headers.location = redirectHeaders.location;
       }
     }
 
@@ -486,7 +552,7 @@ const sendRequest = (libcurl, url, cb) => {
     if (finished) { return; }
 
     finished = true;
-    cleanupStreamListeners();
+    cleanupStreamDrainListeners();
     curl.close();
     let statusCode = 408;
     if (errorCode === 52) {
@@ -747,7 +813,7 @@ class LibCurlRequest {
 
   _retry(result) {
     this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
-    if (this.opts.retry === true && this.opts.retries > 0 && this.opts.retryMethods.includes(this.opts.method)) {
+    if (!this.pipeTo.length && this.opts.retry === true && this.opts.retries > 0 && this.opts.retryMethods.includes(this.opts.method)) {
       const delay = this._getRetryDelay(result);
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
@@ -805,7 +871,7 @@ class LibCurlRequest {
 
   send() {
     this._debug('[send]', this.opts.url);
-    if (this.sent) {
+    if (this.sent || this.finished) {
       return this;
     }
 

@@ -28,6 +28,8 @@ Callers remain responsible for idempotency keys and duplicate-side-effect preven
 
 The default `isBadStatus(statusCode, badStatuses)` returns `badStatuses.includes(statusCode)`. Transport errors retry unless libcurl reports a non-retryable error code. Setting `retry: false`, setting `retries: 0`, or excluding method from `retryMethods` prevents retry.
 
+Requests that use `pipeTo` or `.pipe()` do not retry. A writable destination may already contain bytes from the first response and may already be ended, so replaying another attempt into it is unsafe.
+
 ## Delay calculation
 
 Without `Retry-After`, delay ceiling doubles for each retry: `retryDelay * 2^attempt`, capped at `retryMaxDelay`. With jitter enabled, actual delay is an integer from zero through that ceiling. Set `retryJitter: false` for exact exponential delays.

@@ -106,6 +106,48 @@ describe('local runtime', () => {
     assert.throws(() => request({ url: 'http://127.0.0.1:1', timeout: -1 }), TypeError, 'timeout');
   });
 
+  it('rejects invalid documented option types during construction', () => {
+    const invalidOptions = [
+      ['url', { url: 1 }],
+      ['uri', { url: 'http://127.0.0.1:1', uri: null }],
+      ['auth', { url: 'http://127.0.0.1:1', auth: 1 }],
+      ['form', { url: 'http://127.0.0.1:1', form: null }],
+      ['upload', { url: 'http://127.0.0.1:1', upload: '1' }],
+      ['pipeTo', { url: 'http://127.0.0.1:1', pipeTo: {} }],
+      ['headers', { url: 'http://127.0.0.1:1', headers: [] }],
+      ['header value', { url: 'http://127.0.0.1:1', headers: { 'X-Test': {} } }],
+      ['proxy', { url: 'http://127.0.0.1:1', proxy: 1 }],
+      ['badStatuses', { url: 'http://127.0.0.1:1', badStatuses: [503, '504'] }],
+      ['isBadStatus', { url: 'http://127.0.0.1:1', isBadStatus: null }],
+      ['curlOptions', { url: 'http://127.0.0.1:1', curlOptions: [] }],
+      ['curlFeatures', { url: 'http://127.0.0.1:1', curlFeatures: [] }]
+    ];
+
+    for (const key of [
+      'debug',
+      'retry',
+      'retryJitter',
+      'respectRetryAfter',
+      'keepAlive',
+      'followRedirect',
+      'rawBody',
+      'noStorage',
+      'wait',
+      'rejectUnauthorized',
+      'rejectUnauthorizedProxy'
+    ]) {
+      invalidOptions.push([key, { url: 'http://127.0.0.1:1', [key]: 'true' }]);
+    }
+
+    for (const [key, options] of invalidOptions) {
+      strictAssert.throws(
+        () => request({ ...options, curlOptions: options.curlOptions || { TIMEOUT_MS: 1 } }),
+        { name: 'TypeError' },
+        key
+      );
+    }
+  });
+
   it('returns invalid Curl configuration without performing request', async () => {
     let attempts = 0;
     const server = await createLocalServer((_req, res) => {
@@ -307,6 +349,27 @@ describe('local runtime', () => {
     }
   });
 
+  it('does not send after aborting a waiting request', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.end();
+    });
+
+    try {
+      const req = request({ url: server.url, wait: true }, () => {});
+      req.abort();
+      req.send();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      assert.equal(attempts, 0);
+      assert.equal(req.sent, false);
+      assert.equal(req.timeoutTimer, null);
+      assert.isUndefined(req.curl);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('does not retain timers after request-body serialization fails', async () => {
     const { spawn } = await import('node:child_process');
     const started = Date.now();
@@ -353,6 +416,68 @@ describe('local runtime', () => {
       assert.equal(error.cause.message, 'disk full');
       assert.equal(attempts, 1);
     } finally {
+      await server.close();
+    }
+  });
+
+  it('does not retry HTTP status failures after streaming a response', async () => {
+    const { Writable } = await import('node:stream');
+    let attempts = 0;
+    let body = '';
+    const sink = new Writable({
+      write(chunk, _encoding, callback) {
+        body += chunk.toString();
+        callback();
+      }
+    });
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      if (attempts === 1) {
+        res.writeHead(503);
+        res.end('retry-body');
+      } else {
+        res.end('success-body');
+      }
+    });
+
+    try {
+      const response = await new Promise((resolve, reject) => {
+        request({ url: server.url, pipeTo: sink, retries: 1, retryDelay: 0 }, (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        });
+      });
+      assert.equal(response.statusCode, 503);
+      assert.equal(attempts, 1);
+      assert.equal(body, 'retry-body');
+      assert.isTrue(sink.writableEnded);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('keeps a writable error listener while destroying it after a transport error', async () => {
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, ['test/fixtures/transport-stream-error.js'], {
+      cwd: process.cwd(),
+      stdio: 'inherit'
+    });
+    const exitCode = await new Promise((resolve) => child.once('exit', resolve));
+    assert.equal(exitCode, 0);
+  });
+
+  it('ignores inherited Location values when building redirect response headers', async () => {
+    Object.prototype.Location = 'https://attacker.invalid/inherited';
+    const server = await createLocalServer((_req, res) => {
+      res.writeContinue();
+      res.end('ok');
+    });
+
+    try {
+      const response = await requestAsync({ url: server.url, retry: false });
+      assert.notProperty(response.headers, 'location');
+    } finally {
+      delete Object.prototype.Location;
       await server.close();
     }
   });

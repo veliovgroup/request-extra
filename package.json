@@ -31,9 +31,10 @@
     "test:external": "mocha ./test/npm.js",
     "test:types": "tsc -p test/tsconfig.node.json --noEmit && tsc -p test/tsconfig.node-cjs.json --noEmit && tsc -p test/tsconfig.bun.json --noEmit",
     "test:bun": "bun test ./test/bun.test.js",
+    "test:packed": "node ./test/packed-package.mjs",
     "lint": "eslint .",
     "lint:package": "publint",
-    "test:package": "attw --pack ."
+    "test:package": "npm run test:packed && attw --pack ."
   },
   "repository": {
     "type": "git",

@@ -50,10 +50,10 @@ request.defaultOptions.rejectUnauthorizedProxy = true;
 
 ## Documentation
 
-- [API reference](./docs/api.md)
-- [Examples](./docs/examples.md)
-- [Retries and errors](./docs/retries-and-errors.md)
-- [Native installation and platforms](./docs/platform-notes.md)
+- [API reference](https://github.com/veliovgroup/request-extra/blob/master/docs/api.md)
+- [Examples](https://github.com/veliovgroup/request-extra/blob/master/docs/examples.md)
+- [Retries and errors](https://github.com/veliovgroup/request-extra/blob/master/docs/retries-and-errors.md)
+- [Native installation and platforms](https://github.com/veliovgroup/request-extra/blob/master/docs/platform-notes.md)
 
 ## License
 

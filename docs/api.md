@@ -29,7 +29,7 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | `auth` | `string` | Basic-auth value in `username:password` form. |
 | `form` | `string \| object` | Request payload. Strings get form URL-encoded content type; objects are JSON-stringified and get JSON content type unless header overrides it. |
 | `upload` | `number` | Open file descriptor used as libcurl upload input. Do not combine with `form`; `form` takes precedence. |
-| `pipeTo` | `WritableLike` | Writable destination for response data. |
+| `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. |
 | `headers` | `Record<string, HeaderValue>` | Merges with default headers. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
 | `debug` | `boolean` | Enables request debug output. |
 | `timeout` | `number` | Per-attempt timeout in milliseconds. |
@@ -67,7 +67,7 @@ See [Retries and errors](./retries-and-errors.md).
 
 `sent` reports whether `send()` has run. `finished` reports terminal completion. `opts` exposes normalized request options.
 
-- `.pipe(writableStream)` adds a writable destination and returns request.
+- `.pipe(writableStream)` adds a writable destination, disables retries for that request, and returns request.
 - `.onData(callback)` registers per-chunk response callback and returns request.
 - `.onHeader(callback)` registers per-header callback and returns request.
 - `.send()` starts request once and returns request.
