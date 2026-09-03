@@ -7,7 +7,7 @@ const node_url = require('node:url');
 const nodeLibcurl = require('node-libcurl');
 
 const SSL_ERROR_CODES = [58, 60, 83, 90, 91];
-const CURL_ERROR_CODES = [3, 4, 47];
+const CURL_ERROR_CODES = [3, 4, 23, 47];
 
 const badUrlError = {
   code: 3,
@@ -31,6 +31,15 @@ const abortError = {
   message: '499: Client Closed Request',
   errorCode: 42,
   statusCode: 499
+};
+
+const createPipeError = (cause) => {
+  const error = new Error('500: Writable stream failed', cause ? { cause } : undefined);
+  error.code = 23;
+  error.status = 500;
+  error.errorCode = 23;
+  error.statusCode = 500;
+  return error;
 };
 
 const noop = () => {};
@@ -57,6 +66,7 @@ const sendRequest = (libcurl, url, cb) => {
   const curl = new nodeLibcurl.Curl();
   const opts = libcurl.opts;
   let finished = false;
+  let pipeError = null;
   let timeoutTimer = null;
   let isJsonUpload = false;
   let hasContentType = false;
@@ -131,9 +141,6 @@ const sendRequest = (libcurl, url, cb) => {
   }
 
   const customHeaders = [];
-  if (url.hostname) {
-    customHeaders.push(`Host: ${url.hostname}`);
-  }
 
   let lcHeader = '';
   for (let header in opts.headers) {
@@ -189,6 +196,7 @@ const sendRequest = (libcurl, url, cb) => {
               writableStream.write(data);
             } catch (writableStreamError) {
               libcurl._debug('writableStream.write(data) throw an exception', writableStreamError);
+              pipeError ||= createPipeError(writableStreamError);
             }
           }
         }
@@ -228,24 +236,42 @@ const sendRequest = (libcurl, url, cb) => {
 
     const finish = () => {
       curl.close();
-      cb(void 0, {statusCode, status: statusCode, body, headers});
+      if (pipeError) {
+        cb(pipeError);
+      } else {
+        cb(void 0, {statusCode, status: statusCode, body, headers});
+      }
     };
 
     if (libcurl.pipeTo && libcurl.pipeTo.length) {
       let i = 0;
-      const onStreamEnd = () => {
-        if (++i === libcurl.pipeTo.length) {
+      const writableStreams = libcurl.pipeTo.filter((writableStream) => !writableStream.destroyed);
+
+      if (writableStreams.length !== libcurl.pipeTo.length) {
+        pipeError = createPipeError();
+      }
+
+      if (!writableStreams.length) {
+        finish();
+        return;
+      }
+
+      const onStreamEnd = (writableStreamError) => {
+        if (writableStreamError) {
+          pipeError ||= createPipeError(writableStreamError);
+        }
+        if (++i === writableStreams.length) {
           finish();
         }
       };
-      for (const writableStream of libcurl.pipeTo) {
+      for (const writableStream of writableStreams) {
         libcurl._debug({'writableStream.destroyed': writableStream.destroyed});
-        if (!writableStream.destroyed) {
-          try {
-            writableStream.end('', 'utf8', onStreamEnd);
-          } catch (writableStreamError) {
-            libcurl._debug('writableStream.end(\'\', \'urf8\', onStreamEnd) throw an exception', writableStreamError);
-          }
+        try {
+          writableStream.end('', 'utf8', onStreamEnd);
+        } catch (writableStreamError) {
+          libcurl._debug('writableStream.end(\'\', \'utf8\', onStreamEnd) throw an exception', writableStreamError);
+          pipeError ||= createPipeError(writableStreamError);
+          onStreamEnd();
         }
       }
     } else {
@@ -272,7 +298,9 @@ const sendRequest = (libcurl, url, cb) => {
 
     error.code = errorCode;
     error.status = statusCode;
-    error.message = typeof error.toString === 'function' ? error.toString() : 'Error occurred during request';
+    error.message = typeof error.toString === 'function'
+      ? error.toString().replace(/^Error: Request failed: /, 'Error: ')
+      : 'Error occurred during request';
     error.errorCode = errorCode;
     error.statusCode = statusCode;
 

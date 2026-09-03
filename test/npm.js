@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { Writable } from 'node:stream';
 import request, { requestAsync } from '../index.js';
 import querystring from 'node:querystring';
 
 import { assert } from 'chai';
-import { it, describe } from 'mocha';
+import { after, it, describe } from 'mocha';
 
 const PORT = parseInt(process.env.PORT || 3003);
 const DEBUG = (process.env.DEBUG === 'true') ? true : false;
@@ -34,6 +35,13 @@ const server = http.createServer(function (req, res) {
       } else if (req.url.endsWith('custom-header')) {
         res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', Connection: 'close', 'x-custom-header': req.headers['x-custom-header']});
         res.end(JSON.stringify({'x-custom-header': req.headers['x-custom-header']}));
+      } else if (req.url.endsWith('repeated-headers')) {
+        res.writeHead(200, {
+          'Content-Type': 'text/plain; charset=UTF-8',
+          'Set-Cookie': ['session=one', 'preference=two'],
+          Connection: 'close'
+        });
+        res.end('repeated headers');
       } else if (req.url.endsWith('rfc2616.pdf')) {
         res.writeHead(200, {
           'Content-Type': 'application/pdf',
@@ -71,7 +79,12 @@ const server = http.createServer(function (req, res) {
         res.end(JSON.stringify(obj));
       } else if (req.url.endsWith('upload')) {
         res.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', Connection: 'close'});
-        res.end(JSON.stringify({messageLength: data.length, headers: req.headers}));
+        res.end(JSON.stringify({
+          messageLength: data.length,
+          headers: req.headers,
+          includesMultipartFile: data.includes(fs.readFileSync(path.resolve('.') + '/test/rfc2616.pdf')),
+          includesMultipartField: data.includes(Buffer.from('Form contents string'))
+        }));
       } else {
         res.writeHead(204);
         res.end();
@@ -80,6 +93,10 @@ const server = http.createServer(function (req, res) {
   });
 }).listen(PORT);
 server.keepAliveTimeout = 0;
+
+after((done) => {
+  server.close(done);
+});
 
 describe('LibCurlRequest', function () {
   this.slow(120000);
@@ -835,6 +852,19 @@ describe('LibCurlRequest', function () {
   });
 
   describe('POST', () => {
+    it('POST includes non-default port in Host header', (done) => {
+      request({
+        method: 'POST',
+        url: TEST_URL + '/plain-text',
+        form: 'host-header-test'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error presented');
+        const body = JSON.parse(resp.body);
+        assert.equal(body.headers.host, new URL(TEST_URL).host, 'Host includes non-default port');
+        done();
+      });
+    });
+
     it('POST/plain-text', (done) => {
       const form = 'Loremipsumdolorsitamet,consectetueradipiscingelit.Aeneancommodoligulaegetdolor.Aeneanmassa.Cumsociisnatoquepenatibusetmagnisdisparturientmontes,nasceturridiculusmus.Donecquamfelis,ultriciesnec,pellentesqueeu,pretiumquis,sem.Nullaconsequatmassaquisenim.Donecpedejusto,fringillavel,aliquetnec,vulputateeget,arcu.Inenimjusto,rhoncusut,imperdieta,venenatisvitae,justo.Nullamdictumfeliseupedemollispretium.Integertincidunt.Crasdapibus.Vivamuselementumsempernisi.Aeneanvulputateeleifendtellus.Aeneanleoligula,porttitoreu,consequatvitae,eleifendac,enim.Aliquamloremante,dapibusin,viverraquis,feugiata,tellus.Phasellusviverranullautmetusvariuslaoreet.Quisquerutrum.Aeneanimperdiet.Etiamultriciesnisivelaugue.Curabiturullamcorperultriciesnisi.Namegetdui.Etiamrhoncus.Maecenastempus,tellusegetcondimentumrhoncus,semquamsemperlibero,sitametadipiscingsemnequesedipsum.Namquamnunc,blanditvel,luctuspulvinar,hendreritid,lorem.Maecenasnecodioetantetincidunttempus.Donecvitaesapienutliberovenenatisfaucibus.Nullamquisante.Etiamsitametorciegeterosfaucibustincidunt.Duisleo.Sedfringillamaurissitametnibh.Donecsodalessagittismagna.Sedconsequat,leoegetbibendumsodales,auguevelitcursusnunc,';
       request({
@@ -938,7 +968,8 @@ describe('LibCurlRequest', function () {
         assert.isOk(body.headers['content-type'].startsWith('multipart/form-data;'), '"content-type" header');
         assert.equal(resp.statusCode, 200, 'statusCode: 200');
         assert.equal(resp.status, 200, 'status: 200');
-        assert.equal(body.messageLength, 272360, 'Form received and returned correctly');
+        assert.isTrue(body.includesMultipartFile, 'multipart file received correctly');
+        assert.isTrue(body.includesMultipartField, 'multipart field received correctly');
         done();
       });
     });
@@ -973,6 +1004,55 @@ describe('LibCurlRequest', function () {
       });
     });
 
+    it('GET/text-plain reports an error when pipe target is already destroyed', (done) => {
+      const writableStream = new Writable({
+        write(_chunk, _encoding, callback) {
+          callback();
+        }
+      });
+      writableStream.destroy();
+
+      request({
+        url: TEST_URL + '/text-plain',
+        pipeTo: writableStream,
+        retry: false,
+        timeout: 64
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'response is undefined');
+        assert.instanceOf(error, Error, 'error is presented');
+        assert.equal(error.code, 23, 'error.code is CURLE_WRITE_ERROR');
+        assert.equal(error.errorCode, 23, 'error.errorCode is CURLE_WRITE_ERROR');
+        assert.equal(error.statusCode, 500, 'error.statusCode is 500');
+        done();
+      });
+    });
+
+    it('GET/text-plain reports an error when pipe target cannot finish', (done) => {
+      let endCalls = 0;
+      const writableStream = {
+        destroyed: false,
+        write() {},
+        end(_chunk, _encoding, callback) {
+          endCalls++;
+          callback(new Error('disk full'));
+        }
+      };
+
+      request({
+        url: TEST_URL + '/text-plain',
+        pipeTo: writableStream
+      }, (error, resp) => {
+        assert.isUndefined(resp, 'response is undefined');
+        assert.instanceOf(error, Error, 'error is presented');
+        assert.equal(error.code, 23, 'error.code is CURLE_WRITE_ERROR');
+        assert.equal(error.errorCode, 23, 'error.errorCode is CURLE_WRITE_ERROR');
+        assert.equal(error.statusCode, 500, 'error.statusCode is 500');
+        assert.equal(error.cause.message, 'disk full', 'original stream error is preserved');
+        assert.equal(endCalls, 1, 'write failures are not retried');
+        done();
+      });
+    });
+
     it('GET/text-html', (done) => {
       request({
         url: TEST_URL + '/text-html'
@@ -1002,6 +1082,16 @@ describe('LibCurlRequest', function () {
         assert.equal(resp.headers['x-custom-header'], 'custom-header-value', 'Correct x-custom-header header is presented');
         const jsonResp = JSON.parse(resp.body);
         assert.deepEqual(jsonResp, {'x-custom-header': 'custom-header-value'}, 'Correct body response');
+        done();
+      });
+    });
+
+    it('GET/repeated-headers', (done) => {
+      request({
+        url: TEST_URL + '/repeated-headers'
+      }, (error, resp) => {
+        assert.isUndefined(error, 'no error presented');
+        assert.deepEqual(resp.headers['set-cookie'], ['session=one', 'preference=two'], 'repeated headers remain an array');
         done();
       });
     });

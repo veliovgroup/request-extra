@@ -3,9 +3,10 @@ export default {
   output: {
     file: 'index.cjs',
     format: 'cjs',
+    exports: 'named',
     generatedCode: {
       constBindings: true,
     },
   },
-  external: ['node-libcurl'],
+  external: ['node:fs', 'node:url', 'node-libcurl'],
 };

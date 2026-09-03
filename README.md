@@ -52,7 +52,7 @@ __This is a server-only package.__ `request-libcurl` package was created due to 
 ## Install
 
 ```shell
-# ONLY for node@>=18
+# Current release: Node.js >=22.14
 npm install request-libcurl --save
 
 # for node@>=16.14 || >=18 || >=20 || >=21 (no async API)
@@ -439,7 +439,8 @@ const req = request({
 Download a file to the FileSystem using `.pipe()` method:
 
 ```js
-import fs from 'node:fs/promises';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import { requestAsync } from 'request-libcurl';
 
 const req = await requestAsync({
@@ -455,23 +456,29 @@ req.pipe(fs.createWriteStream('/path/to/file.pdf', { flags: 'w' }));
 await req.sendAsync();
 // File successfully downloaded
 
-const stats = await fs.stat('/path/to/file.pdf');
+const stats = await fsp.stat('/path/to/file.pdf');
 // do something with downloaded file
 ```
 
 ### File upload
 
 ```js
-import fs from 'node:fs/promises';
+import fs from 'node:fs';
 import { requestAsync } from 'request-libcurl';
 
-await requestAsync({
-  method: 'POST',
-  url: 'https://example.com/upload',
-  upload: await fs.open('/path/to/a/file', 'r'),
-  retry: false,
-});
-// File successfully uploaded
+const fd = fs.openSync('/path/to/a/file', 'r');
+
+try {
+  await requestAsync({
+    method: 'POST',
+    url: 'https://example.com/upload',
+    upload: fd,
+    retry: false,
+  });
+  // File successfully uploaded
+} finally {
+  fs.closeSync(fd);
+}
 ```
 
 ### File upload (`multipart/form-data`)
@@ -511,66 +518,13 @@ To change `rejectUnauthorized` option globally use:
 request.defaultOptions.rejectUnauthorized = true;
 ```
 
-### 2. Compiled against Different Node.js version
+### 2. Native install and platform notes
 
-Due to single dependency on `node-libcurl` which shipped with statically built binaries, you may encounter `This module was compiled against a different Node.js version using NODE_MODULE_VERSION` error. This may happen on edge cases, like running the very latest release of node.js (*while bundled builds aren't shipped yet*), then you may want to build this package locally, use one of next commands:
+`request-libcurl` itself is JavaScript. Its `node-libcurl` dependency ships prebuilt native binaries for supported Node.js, OS, and CPU combinations, so normal installs should not compile locally. See [Platform notes](./docs/platform-notes.md) for supported targets, rebuild commands, Node ABI notes, and missing system library fixes.
 
-```shell
-# First: ensure node.js version is matching supported request-libcurl version
-# See "Install" section at the top of this document to check supported versions
-# package might require downgrade installing explicit version
+### 3. Bun
 
-# Please see options below, in dependence from version of NPM and Node.js
-# one of this options should solve this issue
-
-# Option 1: Update and rebuild locally installed binaries
-npm rebuild --update-binary --build-from-source
-
-# Option 2: Build library
-npm install --save request-libcurl --build-from-source
-
-# Option 3: Build library and curl executables:
-npm install --save request-libcurl --build-from-source --curl_static_build=true
-
-# In case if you encounter errors during building package locally:
-# 1. Execute same command as "sudo" (e.g. administrator), and try again
-# 2. Install globally node-gyp and node-pre-gyp NPM packages, and try again
-```
-
-### 3. Missing libraries
-
-Some of indirect dependencies of `libcurl` might be missing. Errors related to missing dependencies include `Library not loaded`, and `image not found` in error's description/output.
-
-#### zstd
-
-One of `curl` dependency libraries is [`zstd`](https://github.com/facebook/zstd). See installation instruction below or [build from source](https://github.com/facebook/zstd#build-instructions)
-
-```shell
-# Error: Library not loaded: /usr/local/opt/zstd/lib/libzstd.1.dylib
-# Reason: image not found
-
-# Solution 1: macOS Install via brew
-brew install zstd
-
-# Solution 2: Linux/Debian/Ubuntu Install via apt-get
-apt-get update
-apt-get install zstd
-
-# Solution 3: Linux/CentOS/RHEL Install via yum
-yum install zstd
-
-# Solution 4: Unix build from source
-# Up to date docs — https://github.com/facebook/zstd#build-instructions
-# Download latest release from here — https://github.com/facebook/zstd/releases
-# For example as of 2020-06-02 — zstd-1.4.8.tar.gz
-curl https://github.com/facebook/zstd/releases/download/v1.4.8/zstd-1.4.8.tar.gz -O
-make
-make install # might require sudo/root permissions
-# Optionally test compiled binary with:
-make check
-```
-
-For more details and instructions for different platforms read `node-libcurl` [official docs](https://github.com/JCMais/node-libcurl#important-notes-on-prebuilt-binaries--direct-installation). __Note__: It's highly recommended to [run tests](https://github.com/veliovgroup/request-extra#running-tests) after building package locally.
+Bun is not supported yet. `node-libcurl` currently calls libuv functions Bun does not implement. `npm run test:bun` tracks runtime compatibility; do not treat passing TypeScript resolution as runtime support. See [Bun issue #18546](https://github.com/oven-sh/bun/issues/18546).
 
 ## Running Tests
 
@@ -579,15 +533,16 @@ For more details and instructions for different platforms read `node-libcurl` [o
 3. Then run:
 
 ```shell
-# Install development NPM dependencies:
-npm install --save-dev
-# Install NPM dependencies:
-npm install --save
-# Run tests:
+# Select version from .nvmrc and install dependencies:
+nvm use
+npm install
+# Run Node.js and TypeScript tests:
 PORT=3003 npm test
+# Probe Bun runtime compatibility (currently expected to fail):
+npm run test:bun
 # Run tests and output debugging details:
 DEBUG=true PORT=3003 npm test
-# PORT env.var is required! And can be changed to any open port!
+# PORT can be changed to any open port
 # Note: The Internet connection is required to perform tests
 # Note: Test-suite includes "no response" and "timing out responses"
 # if a test looks stuck — give it another minute before interrupting it
