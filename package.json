@@ -2,21 +2,26 @@
   "name": "request-libcurl",
   "version": "4.1.0",
   "description": "Extremely stable HTTP request module built on top of libcurl",
-  "main": "index.js",
+  "main": "./index.cjs",
   "types": "./index.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js",
-      "require": "./index.cjs"
+      "import": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      },
+      "require": {
+        "types": "./index.d.cts",
+        "default": "./index.cjs"
+      }
     }
   },
   "files": [
     "index.js",
     "index.cjs",
     "index.d.ts",
-    "docs/platform-notes.md"
+    "index.d.cts"
   ],
   "scripts": {
     "build": "rollup --config rollup.config.js",
