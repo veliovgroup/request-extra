@@ -146,6 +146,7 @@ describe('local runtime', () => {
         }, resolve);
         assert.equal(requestInstance.opts._configurationError.code, 4);
         requestInstance.send();
+        assert.equal(requestInstance.timeoutTimer, null);
       });
       assert.equal(error.errorCode, 4);
       assert.equal(error.status, 500);

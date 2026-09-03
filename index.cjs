@@ -679,6 +679,15 @@ class LibCurlRequest {
     }
 
     this.sent = true;
+    if (this.opts._configurationError) {
+      process.nextTick(() => {
+        if (!this.finished) {
+          this._sendRequestCallback(this.opts._configurationError);
+        }
+      });
+      return this;
+    }
+
     this.timeoutTimer = setTimeout(() => {
       this.abort();
     }, ((this.opts.timeout + this.opts.retryDelay) * (this.opts.retries + 1)));
