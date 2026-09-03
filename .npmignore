@@ -9,3 +9,8 @@ npm-debug.log*
 rollup.config.js
 test/
 test/*
+coverage/
+*.tgz
+docs/
+docs/ci-plan.md
+docs/superpowers/

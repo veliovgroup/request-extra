@@ -1656,10 +1656,8 @@ describe('ASYNC LibCurlRequest', function () {
       });
 
       assert.equal(req.finished, false, '.finished is false');
-      const waitForAbort = new Promise(async (resolve) => {
-        await req.abortAsync();
+      const waitForAbort = req.abortAsync().then(() => {
         assert.equal(req.finished, true, '.finished is true');
-        resolve();
       });
 
       req.send();
