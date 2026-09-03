@@ -7,6 +7,8 @@ export interface WritableLike {
   write(chunk: unknown, encoding?: string, callback?: (error?: Error | null) => void): unknown;
   end(chunk?: unknown, encoding?: string, callback?: (error?: Error | null) => void): unknown;
   destroy?(error?: Error): unknown;
+  once?(event: 'drain' | 'error', listener: (...args: unknown[]) => void): this;
+  removeListener?(event: 'drain' | 'error', listener: (...args: unknown[]) => void): this;
 }
 
 export interface RequestOptions {

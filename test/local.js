@@ -330,4 +330,84 @@ describe('local runtime', () => {
     assert.equal(exitCode, 0);
     assert.isBelow(Date.now() - started, 750);
   });
+
+  it('returns stream write errors without retrying', async () => {
+    const { Writable } = await import('node:stream');
+    let attempts = 0;
+    const sink = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback(new Error('disk full'));
+      }
+    });
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.end('body');
+    });
+
+    try {
+      const error = await new Promise((resolve) => {
+        request({ url: server.url, pipeTo: sink, retries: 2 }, resolve);
+      });
+      assert.equal(error.code, 23);
+      assert.equal(error.statusCode, 500);
+      assert.equal(error.cause.message, 'disk full');
+      assert.equal(attempts, 1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('waits for writable drain before accepting more response chunks', async () => {
+    const { EventEmitter } = await import('node:events');
+    const events = [];
+    class SlowSink extends EventEmitter {
+      constructor() {
+        super();
+        this.destroyed = false;
+        this.writes = 0;
+      }
+
+      write() {
+        this.writes++;
+        events.push(`write:${this.writes}`);
+        if (this.writes === 1) {
+          setTimeout(() => {
+            events.push('drain');
+            this.emit('drain');
+          }, 100);
+          return false;
+        }
+        return true;
+      }
+
+      end(_chunk, _encoding, callback) {
+        callback();
+      }
+
+      destroy(error) {
+        this.destroyed = true;
+        if (error) this.emit('error', error);
+      }
+    }
+
+    const sink = new SlowSink();
+    const server = await createLocalServer((_req, res) => {
+      res.flushHeaders();
+      res.write('first');
+      setTimeout(() => res.end('second'), 20);
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        request({ url: server.url, pipeTo: sink, retry: false }, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+      assert.notEqual(events.indexOf('drain'), -1);
+      assert.notEqual(events.indexOf('write:2'), -1);
+      assert.isBelow(events.indexOf('drain'), events.indexOf('write:2'));
+    } finally {
+      await server.close();
+    }
+  });
 });

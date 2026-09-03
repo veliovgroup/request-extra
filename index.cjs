@@ -194,6 +194,9 @@ const sendRequest = (libcurl, url, cb) => {
   let hasContentLength = false;
   let hasAcceptEncoding = false;
   let configurationError = null;
+  const blockedStreams = new Set();
+  const streamErrorListeners = new Map();
+  const streamDrainListeners = new Map();
 
   const stopAttemptTimeout = () => {
     if (timeoutTimer) {
@@ -205,6 +208,56 @@ const sendRequest = (libcurl, url, cb) => {
     }
   };
   libcurl._stopAttemptTimeout = stopAttemptTimeout;
+
+  const removeStreamListener = (writableStream, event, listener) => {
+    if (listener && typeof writableStream.removeListener === 'function') {
+      writableStream.removeListener(event, listener);
+    }
+  };
+
+  const cleanupStreamListeners = () => {
+    for (const [writableStream, listener] of streamErrorListeners) {
+      removeStreamListener(writableStream, 'error', listener);
+    }
+    for (const [writableStream, listener] of streamDrainListeners) {
+      removeStreamListener(writableStream, 'drain', listener);
+    }
+    streamErrorListeners.clear();
+    streamDrainListeners.clear();
+    blockedStreams.clear();
+    if (libcurl._cleanupPipeListeners === cleanupStreamListeners) {
+      libcurl._cleanupPipeListeners = noop;
+    }
+  };
+
+  const failPipe = (cause) => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    stopAttemptTimeout();
+    libcurl._stopRequestTimeout();
+    pipeError = createPipeError(cause);
+    cleanupStreamListeners();
+    setImmediate(() => {
+      closeCurl(curl);
+      cb(pipeError);
+    });
+  };
+
+  const resumeAfterDrain = (writableStream) => {
+    blockedStreams.delete(writableStream);
+    streamDrainListeners.delete(writableStream);
+    if (!blockedStreams.size && !finished) {
+      try {
+        curl.pause(nodeLibcurl.CurlPause.Cont);
+      } catch (error) {
+        failPipe(error);
+      }
+    }
+  };
+
+  libcurl._cleanupPipeListeners = cleanupStreamListeners;
 
   timeoutTimer = setTimeout(() => {
     libcurl.abort();
@@ -302,9 +355,24 @@ const sendRequest = (libcurl, url, cb) => {
     curl.on('header', libcurl._onHeader);
   }
 
+  if (libcurl.pipeTo && libcurl.pipeTo.length) {
+    for (const writableStream of libcurl.pipeTo) {
+      if (typeof writableStream.once === 'function') {
+        const onStreamError = (error) => failPipe(error);
+        streamErrorListeners.set(writableStream, onStreamError);
+        try {
+          writableStream.once('error', onStreamError);
+        } catch (error) {
+          failPipe(error);
+          break;
+        }
+      }
+    }
+  }
+
   if ((libcurl.pipeTo && libcurl.pipeTo.length) || libcurl._onData) {
     curl.on('data', (data) => {
-      if (!data) {
+      if (!data || finished) {
         return;
       }
 
@@ -316,10 +384,18 @@ const sendRequest = (libcurl, url, cb) => {
         for (const writableStream of libcurl.pipeTo) {
           if (!writableStream.destroyed) {
             try {
-              writableStream.write(data);
+              const canContinue = writableStream.write(data);
+              if (canContinue === false && typeof writableStream.once === 'function' && !blockedStreams.has(writableStream)) {
+                const onDrain = () => resumeAfterDrain(writableStream);
+                blockedStreams.add(writableStream);
+                streamDrainListeners.set(writableStream, onDrain);
+                writableStream.once('drain', onDrain);
+                curl.pause(nodeLibcurl.CurlPause.Recv);
+              }
             } catch (writableStreamError) {
               libcurl._debug('writableStream.write(data) throw an exception', writableStreamError);
-              pipeError ||= createPipeError(writableStreamError);
+              failPipe(writableStreamError);
+              return;
             }
           }
         }
@@ -358,6 +434,7 @@ const sendRequest = (libcurl, url, cb) => {
     }
 
     const finish = () => {
+      cleanupStreamListeners();
       curl.close();
       if (pipeError) {
         cb(pipeError);
@@ -409,6 +486,7 @@ const sendRequest = (libcurl, url, cb) => {
     if (finished) { return; }
 
     finished = true;
+    cleanupStreamListeners();
     curl.close();
     let statusCode = 408;
     if (errorCode === 52) {
@@ -463,6 +541,7 @@ const sendRequest = (libcurl, url, cb) => {
         finished = true;
         stopAttemptTimeout();
         libcurl._stopRequestTimeout();
+        cleanupStreamListeners();
         process.nextTick(() => {
           libcurl.finished = true;
           curl.close();
@@ -519,6 +598,7 @@ const sendRequest = (libcurl, url, cb) => {
   if (configurationError) {
     finished = true;
     stopAttemptTimeout();
+    cleanupStreamListeners();
     process.nextTick(() => {
       closeCurl(curl);
       cb(configurationError);
@@ -529,7 +609,7 @@ const sendRequest = (libcurl, url, cb) => {
   curl.setOpt(nodeLibcurl.Curl.option.HTTPHEADER, customHeaders);
 
   process.nextTick(() => {
-    if (!libcurl.finished) {
+    if (!libcurl.finished && !finished) {
       curl.perform();
     }
   });
@@ -559,6 +639,7 @@ class LibCurlRequest {
     this.retryTimer = false;
     this.timeoutTimer = null;
     this._stopAttemptTimeout = noop;
+    this._cleanupPipeListeners = noop;
 
     if (this.opts.debug) {
       this._debug = _debug;
@@ -759,6 +840,7 @@ class LibCurlRequest {
     this._debug('[abort]', this.opts.url);
     this._stopAttemptTimeout();
     this._stopRequestTimeout();
+    this._cleanupPipeListeners();
     this.curl?.removeAllListeners?.();
 
     if (this.retryTimer) {
