@@ -24,7 +24,7 @@ export interface RequestOptions {
   retry?: boolean;
   retries?: number;
   retryDelay?: number;
-  retryMethods?: string[];
+  retryMethods?: readonly string[];
   retryMaxDelay?: number;
   retryJitter?: boolean;
   respectRetryAfter?: boolean;
@@ -46,8 +46,9 @@ export interface RequestOptions {
 
 export type RequestInput = RequestOptions & ({ url: string } | { uri: string });
 
-export interface RequestDefaultOptions extends Required<Omit<RequestOptions, 'url' | 'uri' | 'auth' | 'form' | 'upload' | 'pipeTo' | 'curlOptions' | 'curlFeatures'>> {
+export interface RequestDefaultOptions extends Required<Omit<RequestOptions, 'url' | 'uri' | 'auth' | 'form' | 'upload' | 'pipeTo' | 'retryMethods' | 'curlOptions' | 'curlFeatures'>> {
   headers: Record<string, HeaderValue>;
+  retryMethods: string[];
 }
 
 export interface Response {

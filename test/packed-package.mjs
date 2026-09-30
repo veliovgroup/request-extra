@@ -32,12 +32,16 @@ try {
     '--pack-destination',
     temporaryDirectory
   ], { ...commandOptions, cwd: root, encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] }));
-  const packageFiles = packed[0].files.map(({ path }) => path);
-  assert.equal(
-    packageFiles.some((path) => path === 'docs' || path.startsWith('docs/')),
-    false,
-    'published tarball must exclude the entire docs directory'
-  );
+  const packageFiles = packed[0].files.map(({ path }) => path).sort();
+  assert.deepEqual(packageFiles, [
+    'LICENSE',
+    'README.md',
+    'index.cjs',
+    'index.d.cts',
+    'index.d.ts',
+    'index.js',
+    'package.json'
+  ]);
 
   cpSync(fixture, consumer, { recursive: true });
   const tarball = join(temporaryDirectory, packed[0].filename);
@@ -53,7 +57,8 @@ try {
     join(consumer, 'node_modules', 'request-libcurl', 'package.json'),
     'utf8'
   ));
-  assert.equal(installedPackage.version, '5.0.0');
+  const sourcePackage = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.equal(installedPackage.version, sourcePackage.version);
 } finally {
   rmSync(temporaryDirectory, { recursive: true, force: true });
 }

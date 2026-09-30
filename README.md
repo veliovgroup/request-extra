@@ -51,6 +51,7 @@ request.defaultOptions.rejectUnauthorizedProxy = true;
 ## Documentation
 
 - [API reference](https://github.com/veliovgroup/request-extra/blob/master/docs/api.md)
+- [Migrating from v4 to v5](https://github.com/veliovgroup/request-extra/blob/master/docs/migration-v5.md)
 - [Examples](https://github.com/veliovgroup/request-extra/blob/master/docs/examples.md)
 - [Retries and errors](https://github.com/veliovgroup/request-extra/blob/master/docs/retries-and-errors.md)
 - [Native installation and platforms](https://github.com/veliovgroup/request-extra/blob/master/docs/platform-notes.md)

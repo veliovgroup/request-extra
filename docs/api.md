@@ -25,17 +25,17 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | Option | Type | Meaning |
 | --- | --- | --- |
 | `url`, `uri` | `string` | Request URL. `uri` wins when both are present. |
-| `method` | `string` | HTTP method. Normalized to uppercase. |
+| `method` | `string` | HTTP method token. Rejects whitespace and control characters, then normalizes to uppercase. |
 | `auth` | `string` | Basic-auth value in `username:password` form. |
-| `form` | `string \| object` | Request payload. Strings get form URL-encoded content type; objects are JSON-stringified and get JSON content type unless header overrides it. |
-| `upload` | `number` | Open file descriptor used as libcurl upload input. Do not combine with `form`; `form` takes precedence. |
+| `form` | `string \| object` | Request payload. Strings, including an empty string, get form URL-encoded content type; objects are JSON-stringified and get JSON content type unless header overrides it. |
+| `upload` | `number` | Non-negative integer file descriptor used as libcurl upload input. Do not combine with `form`; `form` takes precedence. Uploads do not retry because a consumed descriptor cannot be replayed safely. |
 | `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. |
 | `headers` | `Record<string, HeaderValue>` | Merges with default headers. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
 | `debug` | `boolean` | Enables request debug output. |
 | `timeout` | `number` | Per-attempt timeout in milliseconds. |
 | `keepAlive` | `boolean` | Enables TCP keepalive probes. |
 | `followRedirect` | `boolean` | Follows redirects. |
-| `maxRedirects` | `number` | Redirect limit. |
+| `maxRedirects` | `number` | Non-negative integer redirect limit. |
 | `badStatuses` | `number[]` | Statuses passed to `isBadStatus`. |
 | `isBadStatus` | `(statusCode, badStatuses?) => boolean` | Decides whether a response status can retry. |
 | `rawBody` | `boolean` | Enables raw libcurl body handling. Use `onHeader()` for headers. |
@@ -54,9 +54,9 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | Option | Type | Meaning |
 | --- | --- | --- |
 | `retry` | `boolean` | Enables retries. |
-| `retries` | `number` | Number of additional attempts. |
+| `retries` | `number` | Non-negative integer number of additional attempts. |
 | `retryDelay` | `number` | Initial retry-delay ceiling in milliseconds. |
-| `retryMethods` | `string[]` | Methods eligible for retries. |
+| `retryMethods` | `readonly string[]` | Methods eligible for retries. |
 | `retryMaxDelay` | `number` | Maximum retry delay in milliseconds. |
 | `retryJitter` | `boolean` | Randomizes each retry delay. |
 | `respectRetryAfter` | `boolean` | Uses valid `Retry-After` headers. |
@@ -76,6 +76,8 @@ See [Retries and errors](./retries-and-errors.md).
 - `.abortAsync()` aborts unfinished Promise-mode request. It rejects with abort error when request is still active; after completion, it returns existing settled Promise.
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.
+
+Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, library calls `destroy(error)` when a writable provides it. A writable with a string `path` may have that partial file removed.
 
 ## Response
 

@@ -1,5 +1,6 @@
 import { assert } from 'chai';
 import strictAssert from 'node:assert/strict';
+import { closeSync, openSync, readFileSync } from 'node:fs';
 import { describe, it } from 'mocha';
 import request, { requestAsync } from '../index.js';
 import { createLocalServer, waitFor } from './helpers/local-server.js';
@@ -25,6 +26,34 @@ describe('local runtime', () => {
     }
   });
 
+  it('sends an empty string form with form headers', async () => {
+    const server = await createLocalServer((incoming, res) => {
+      let body = '';
+      incoming.setEncoding('utf8');
+      incoming.on('data', (chunk) => {
+        body += chunk;
+      });
+      incoming.on('end', () => {
+        res.end(JSON.stringify({ body, headers: incoming.headers }));
+      });
+    });
+
+    try {
+      const response = await requestAsync({
+        url: server.url,
+        method: 'POST',
+        form: '',
+        retry: false
+      });
+      const received = JSON.parse(response.body);
+      assert.equal(received.body, '');
+      assert.equal(received.headers['content-type'], 'application/x-www-form-urlencoded');
+      assert.equal(received.headers['content-length'], '0');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('rejects CRLF in request header values', async () => {
     await strictAssert.rejects(
       requestAsync({
@@ -45,6 +74,31 @@ describe('local runtime', () => {
       }),
       { name: 'TypeError', message: 'Invalid HTTP header name: "Bad Header"' }
     );
+  });
+
+  it('rejects invalid HTTP method tokens', () => {
+    for (const method of ['', ' GET ', 'GET\r\nX-Injected: yes']) {
+      strictAssert.throws(
+        () => request({ url: 'http://127.0.0.1:1', method }),
+        { name: 'TypeError', message: '{opts.method} expecting a valid HTTP token' }
+      );
+    }
+  });
+
+  it('does not share reusable error objects between requests', async () => {
+    const firstUrlError = await requestAsync({ url: 'not-a-url' }).catch((error) => error);
+    firstUrlError.statusCode = 599;
+    const secondUrlError = await requestAsync({ url: 'not-a-url' }).catch((error) => error);
+    assert.equal(secondUrlError.statusCode, 400);
+
+    const firstAbortError = await new Promise((resolve) => {
+      request({ url: 'http://127.0.0.1:1', wait: true }, resolve).abort();
+    });
+    firstAbortError.statusCode = 599;
+    const secondAbortError = await new Promise((resolve) => {
+      request({ url: 'http://127.0.0.1:1', wait: true }, resolve).abort();
+    });
+    assert.equal(secondAbortError.statusCode, 499);
   });
 
   it('validates headers before creating a waiting request', () => {
@@ -104,6 +158,24 @@ describe('local runtime', () => {
   it('rejects negative retry and timeout values', () => {
     assert.throws(() => request({ url: 'http://127.0.0.1:1', retries: -1 }), TypeError, 'retries');
     assert.throws(() => request({ url: 'http://127.0.0.1:1', timeout: -1 }), TypeError, 'timeout');
+  });
+
+  it('rejects fractional attempt and redirect counts', () => {
+    for (const key of ['retries', 'maxRedirects']) {
+      strictAssert.throws(
+        () => request({ url: 'http://127.0.0.1:1', [key]: 1.5 }),
+        { name: 'TypeError', message: `{opts.${key}} expecting a non-negative integer` }
+      );
+    }
+  });
+
+  it('rejects invalid file descriptors', () => {
+    for (const upload of [-1, 1.5]) {
+      strictAssert.throws(
+        () => request({ url: 'http://127.0.0.1:1', upload }),
+        { name: 'TypeError', message: '{opts.upload} expecting a non-negative integer' }
+      );
+    }
   });
 
   it('rejects invalid documented option types during construction', () => {
@@ -215,6 +287,75 @@ describe('local runtime', () => {
       assert.equal(response.statusCode, 500);
       assert.equal(attempts, 2);
     } finally {
+      await server.close();
+    }
+  });
+
+  it('uploads from file descriptor zero', async () => {
+    const { spawn } = await import('node:child_process');
+    const file = new URL('./bb.jpg', import.meta.url);
+    const expectedBytes = readFileSync(file).byteLength;
+    const server = await createLocalServer((incoming, res) => {
+      let receivedBytes = 0;
+      incoming.on('data', (chunk) => {
+        receivedBytes += chunk.byteLength;
+      });
+      incoming.on('end', () => res.end(String(receivedBytes)));
+    });
+    const input = openSync(file, 'r');
+
+    try {
+      const child = spawn(process.execPath, ['test/fixtures/stdin-upload.js', server.url], {
+        cwd: process.cwd(),
+        stdio: [input, 'pipe', 'pipe']
+      });
+      const stdout = [];
+      const stderr = [];
+      child.stdout.on('data', (chunk) => stdout.push(chunk));
+      child.stderr.on('data', (chunk) => stderr.push(chunk));
+      const exitCode = await new Promise((resolve) => child.once('exit', resolve));
+      assert.equal(exitCode, 0, Buffer.concat(stderr).toString());
+      const response = JSON.parse(Buffer.concat(stdout).toString());
+      assert.equal(Number(response.body), expectedBytes);
+    } finally {
+      closeSync(input);
+      await server.close();
+    }
+  });
+
+  it('does not retry file-descriptor uploads', async () => {
+    const file = new URL('./bb.jpg', import.meta.url);
+    const expectedBytes = readFileSync(file).byteLength;
+    const receivedBytes = [];
+    let attempts = 0;
+    const server = await createLocalServer((incoming, res) => {
+      attempts++;
+      let bytes = 0;
+      incoming.on('data', (chunk) => {
+        bytes += chunk.byteLength;
+      });
+      incoming.on('end', () => {
+        receivedBytes.push(bytes);
+        res.writeHead(503);
+        res.end();
+      });
+    });
+    const upload = openSync(file, 'r');
+
+    try {
+      const response = await requestAsync({
+        url: server.url,
+        method: 'PUT',
+        upload,
+        retries: 1,
+        retryDelay: 0,
+        retryJitter: false
+      });
+      assert.equal(response.statusCode, 503);
+      assert.equal(attempts, 1);
+      assert.deepEqual(receivedBytes, [expectedBytes]);
+    } finally {
+      closeSync(upload);
       await server.close();
     }
   });
@@ -382,6 +523,31 @@ describe('local runtime', () => {
     assert.isBelow(Date.now() - started, 1000);
   });
 
+  it('returns a bad request when object serialization produces undefined', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => {
+      attempts++;
+      res.end();
+    });
+
+    try {
+      const error = await new Promise((resolve) => {
+        const req = request({
+          url: server.url,
+          wait: true,
+          retry: false,
+          form: { toJSON() {} }
+        }, resolve);
+        req.send();
+      });
+      assert.equal(error.errorCode, 43);
+      assert.equal(error.statusCode, 400);
+      assert.equal(attempts, 0);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('does not retain per-attempt timeout after manual abort', async () => {
     const { spawn } = await import('node:child_process');
     const started = Date.now();
@@ -456,6 +622,34 @@ describe('local runtime', () => {
     }
   });
 
+  it('does not retry after invoking response stream callbacks', async () => {
+    for (const hook of ['onData', 'onHeader']) {
+      let attempts = 0;
+      let callbackCalls = 0;
+      const server = await createLocalServer((_req, res) => {
+        attempts++;
+        res.writeHead(503, { 'X-Attempt': String(attempts) });
+        res.end('retry-body');
+      });
+
+      try {
+        const req = await requestAsync({
+          url: server.url,
+          wait: true,
+          retries: 1,
+          retryDelay: 0
+        });
+        req[hook](() => callbackCalls++);
+        const response = await req.sendAsync();
+        assert.equal(response.statusCode, 503);
+        assert.equal(attempts, 1, hook);
+        assert.isAbove(callbackCalls, 0, hook);
+      } finally {
+        await server.close();
+      }
+    }
+  });
+
   it('keeps a writable error listener while destroying it after a transport error', async () => {
     const { spawn } = await import('node:child_process');
     const child = spawn(process.execPath, ['test/fixtures/transport-stream-error.js'], {
@@ -464,6 +658,26 @@ describe('local runtime', () => {
     });
     const exitCode = await new Promise((resolve) => child.once('exit', resolve));
     assert.equal(exitCode, 0);
+  });
+
+  it('cleans up transport error listeners when writable has no destroy method', async () => {
+    const { EventEmitter } = await import('node:events');
+    class MinimalSink extends EventEmitter {
+      write() { return true; }
+      end(_chunk, _encoding, callback) { callback(); }
+    }
+    const sink = new MinimalSink();
+    const server = await createLocalServer((incoming) => incoming.socket.destroy());
+
+    try {
+      const error = await new Promise((resolve) => {
+        request({ url: server.url, pipeTo: sink, retry: false }, resolve);
+      });
+      assert.equal(error.statusCode, 503);
+      assert.equal(sink.listenerCount('error'), 0);
+    } finally {
+      await server.close();
+    }
   });
 
   it('ignores inherited Location values when building redirect response headers', async () => {

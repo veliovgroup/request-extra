@@ -151,8 +151,8 @@ const normalizeOptions = (opts) => {
   if (normalized.form !== undefined && (normalized.form === null || !['string', 'object'].includes(typeof normalized.form))) {
     throw new TypeError('{opts.form} expecting a String or Object');
   }
-  if (normalized.upload !== undefined && !Number.isFinite(normalized.upload)) {
-    throw new TypeError('{opts.upload} expecting a finite Number');
+  if (normalized.upload !== undefined && (!Number.isInteger(normalized.upload) || normalized.upload < 0)) {
+    throw new TypeError('{opts.upload} expecting a non-negative integer');
   }
   if (normalized.pipeTo !== undefined && !isWritableLike(normalized.pipeTo)) {
     throw new TypeError('[request-libcurl] {opts.pipeTo} option expected to be {stream.Writable}');
@@ -166,12 +166,17 @@ const normalizeOptions = (opts) => {
   if (!isRecord(normalized.curlFeatures) && normalized.curlFeatures !== undefined) {
     throw new TypeError('{opts.curlFeatures} expecting an Object');
   }
-  if (typeof normalized.method !== 'string' || !normalized.method.trim()) {
-    throw new TypeError('{opts.method} expecting a non-empty String');
+  if (typeof normalized.method !== 'string' || !HTTP_TOKEN.test(normalized.method)) {
+    throw new TypeError('{opts.method} expecting a valid HTTP token');
   }
-  for (const key of ['timeout', 'retryDelay', 'maxRedirects', 'retries']) {
+  for (const key of ['timeout', 'retryDelay']) {
     if (!Number.isFinite(normalized[key]) || normalized[key] < 0) {
       throw new TypeError(`{opts.${key}} expecting a non-negative finite Number`);
+    }
+  }
+  for (const key of ['maxRedirects', 'retries']) {
+    if (!Number.isInteger(normalized[key]) || normalized[key] < 0) {
+      throw new TypeError(`{opts.${key}} expecting a non-negative integer`);
     }
   }
   if (!Array.isArray(normalized.retryMethods) || normalized.retryMethods.some((method) => typeof method !== 'string')) {
@@ -568,12 +573,19 @@ const sendRequest = (libcurl, url, cb) => {
 
     if (libcurl.pipeTo && libcurl.pipeTo.length) {
       for (const writableStream of libcurl.pipeTo) {
-        if (!writableStream.destroyed) {
+        if (!writableStream.destroyed && typeof writableStream.destroy === 'function') {
           try {
             writableStream.destroy(error);
           } catch (writableStreamError) {
             libcurl._debug('writableStream.destroy(error) throw an exception', writableStreamError);
+            const listener = streamErrorListeners.get(writableStream);
+            removeStreamListener(writableStream, 'error', listener);
+            streamErrorListeners.delete(writableStream);
           }
+        } else if (typeof writableStream.destroy !== 'function') {
+          const listener = streamErrorListeners.get(writableStream);
+          removeStreamListener(writableStream, 'error', listener);
+          streamErrorListeners.delete(writableStream);
         }
 
         if (writableStream.path && typeof writableStream.path === 'string') {
@@ -589,7 +601,7 @@ const sendRequest = (libcurl, url, cb) => {
     cb(error);
   });
 
-  if (opts.form) {
+  if (opts.form !== undefined) {
     if (typeof opts.form === 'object') {
       isJsonUpload = true;
     }
@@ -597,6 +609,9 @@ const sendRequest = (libcurl, url, cb) => {
     if (typeof opts.form !== 'string') {
       try {
         opts.form = JSON.stringify(opts.form);
+        if (opts.form === undefined) {
+          throw new TypeError('Request body cannot be serialized');
+        }
       } catch (e) {
         libcurl._debug('Can\'t stringify opts.form in POST request:', url.href, e);
         finished = true;
@@ -604,9 +619,8 @@ const sendRequest = (libcurl, url, cb) => {
         libcurl._stopRequestTimeout();
         cleanupStreamListeners();
         process.nextTick(() => {
-          libcurl.finished = true;
           curl.close();
-          cb(badRequestError);
+          cb({ ...badRequestError });
         });
         return curl;
       }
@@ -621,11 +635,11 @@ const sendRequest = (libcurl, url, cb) => {
     }
 
     if (!hasContentLength && typeof opts.form === 'string') {
-      customHeaders.push(`Content-Length: ${Buffer.byteLength(Buffer.from(opts.form))}`);
+      customHeaders.push(`Content-Length: ${Buffer.byteLength(opts.form)}`);
     }
 
     curl.setOpt(Curl.option.POSTFIELDS, opts.form);
-  } else if (opts.upload) {
+  } else if (opts.upload !== undefined) {
     curl.setOpt(Curl.option.UPLOAD, true);
     curl.setOpt(Curl.option.READDATA, opts.upload);
   }
@@ -738,9 +752,9 @@ class LibCurlRequest {
       this.finished = true;
       process.nextTick(() => {
         if (this.opts.isPromise) {
-          this._reject(badUrlError);
+          this._reject({ ...badUrlError });
         } else {
-          this.cb(badUrlError);
+          this.cb({ ...badUrlError });
         }
       });
       return;
@@ -808,7 +822,15 @@ class LibCurlRequest {
 
   _retry(result) {
     this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
-    if (!this.pipeTo.length && this.opts.retry === true && this.opts.retries > 0 && this.opts.retryMethods.includes(this.opts.method)) {
+    if (
+      !this.pipeTo.length
+      && !this._onData
+      && !this._onHeader
+      && this.opts.upload === undefined
+      && this.opts.retry === true
+      && this.opts.retries > 0
+      && this.opts.retryMethods.includes(this.opts.method)
+    ) {
       const delay = this._getRetryDelay(result);
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
@@ -914,9 +936,9 @@ class LibCurlRequest {
 
       this.finished = true;
       if (this.opts.isPromise) {
-        this._reject(abortError);
+        this._reject({ ...abortError });
       } else {
-        this.cb(abortError);
+        this.cb({ ...abortError });
       }
     }
     return this;

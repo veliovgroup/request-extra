@@ -33,6 +33,12 @@ const retryOptions: RequestOptions = {
 };
 retryOptions.retryMethods?.includes('POST');
 
+const readonlyRetryOptions = {
+  url: 'https://example.com',
+  retryMethods: ['GET']
+} as const;
+request(readonlyRetryOptions).abort();
+
 const req: LibCurlRequest = request(opts, (error?: ResponseError, response?: Response) => {
   if (error) {
     error.statusCode.toFixed();

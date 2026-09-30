@@ -30,6 +30,10 @@ The default `isBadStatus(statusCode, badStatuses)` returns `badStatuses.includes
 
 Requests that use `pipeTo` or `.pipe()` do not retry. A writable destination may already contain bytes from the first response and may already be ended, so replaying another attempt into it is unsafe.
 
+Requests that use `upload` do not retry. Libcurl advances the supplied file descriptor while sending, and the library cannot safely rewind or recreate it for another attempt.
+
+Requests with `onData()` or `onHeader()` callbacks do not retry. These callbacks expose attempt data immediately, so later retries would mix output from separate responses.
+
 ## Delay calculation
 
 Without `Retry-After`, delay ceiling doubles for each retry: `retryDelay * 2^attempt`, capped at `retryMaxDelay`. With jitter enabled, actual delay is an integer from zero through that ceiling. Set `retryJitter: false` for exact exponential delays.
