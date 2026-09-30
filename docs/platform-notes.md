@@ -108,7 +108,12 @@ Error: Invalid argument
 
 ## Node.js 26
 
-`node-libcurl` 5.1.2 ships a prebuilt binary for Node.js 26, but every transfer waits about one second before completing. A raw `curly.get()` to a local server takes 5 ms on Node.js 24 and about 1000 ms on Node.js 26.10.0, so the delay is in the addon's event-loop integration, not in `request-libcurl`. Retry timing tests fail on Node.js 26 for this reason. CI keeps the Node.js 26 job informational until upstream resolves it. Use Node.js 22 or 24 in production.
+`node-libcurl` 5.1.2 ships a prebuilt binary for Node.js 26, but its libuv integration sometimes fails to wake the event loop. A transfer then finishes only when libcurl's fallback timer fires about one second later. Transfers to a remote server, or to a server in another process, run at normal speed. Two cases are affected on Node.js 26.10.0:
+
+- A server in the same process as the client. After the first transfer, each request that reuses the keep-alive connection takes about 1000 ms instead of about 1 ms. Setting `curlOptions: { FORBID_REUSE: true }` avoids the delay.
+- File-descriptor uploads (`upload: fd`). The upload stalls until `timeout`, then `node-libcurl` throws an uncaught `Curl handle is closed` error from its `end` handler. No workaround is known.
+
+Any other timer or I/O activity in the process hides both problems, because it keeps the event loop waking up. The test suite sets `FORBID_REUSE` on Node.js 26 (`test/helpers/node26.js`) and skips the file-descriptor upload test there. Do not use `upload` on Node.js 26.
 
 ## Bun
 
