@@ -951,7 +951,8 @@ describe('local coverage gaps', () => {
         return true;
       });
       strictAssert.equal(writes, 2);
-      // Sibling destruction is missing in failPipe; reported as a production bug.
+      strictAssert.equal(sibling.destroyed, true);
+      strictAssert.equal(sibling.errored?.cause, cause);
     } finally {
       sibling.destroy();
       failing.destroy();
@@ -972,7 +973,7 @@ describe('local coverage gaps', () => {
       strictAssert.ok(Buffer.isBuffer(response.body));
       strictAssert.equal(response.body.toString(), 'raw-body');
       strictAssert.match(Buffer.concat(chunks).toString(), /X-Raw-Test: present/i);
-      // Raw response.headers is empty; reported rather than asserted as correct.
+      strictAssert.equal(response.headers['x-raw-test'], 'present');
     } finally {
       await server.close();
     }
@@ -1251,6 +1252,23 @@ describe('local cleanup gaps', () => {
     }
   });
 
+  it('consumes writable final errors when caller has no error listener', async () => {
+    const { Writable } = await import('node:stream');
+    const cause = new Error('final failed');
+    const sink = new Writable({
+      write(_chunk, _encoding, callback) { callback(); },
+      final(callback) { setImmediate(() => callback(cause)); }
+    });
+    const server = await createLocalServer((_req, res) => res.end('body'));
+    try {
+      await strictAssert.rejects(requestAsync({ url: server.url, pipeTo: sink }), { errorCode: 23, cause });
+      await new Promise((resolve) => setImmediate(resolve));
+      strictAssert.equal(sink.errored, cause);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('cleans listeners when writable destroy throws on transport error', async () => {
     const { EventEmitter } = await import('node:events');
     class Sink extends EventEmitter {
@@ -1345,7 +1363,7 @@ describe('local header casing', () => {
       const index = headers.indexOf('content-type');
       strictAssert.ok(index >= 0);
       strictAssert.equal(headers[index + 1], 'caller');
-      // The default also goes over the wire; true case-insensitive override is missing.
+      strictAssert.equal(headers.filter((name) => name.toLowerCase() === 'content-type').length, 1);
     } finally {
       request.defaultOptions.headers = original;
       await server.close();

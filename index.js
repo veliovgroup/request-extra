@@ -213,9 +213,13 @@ const normalizeOptions = (opts) => {
   }
   normalized.method = normalized.method.toUpperCase();
   normalized.retryMethods = normalized.retryMethods.map((method) => method.toUpperCase());
+  const callerHeaders = definedOptions.headers || {};
+  const callerHeaderNames = new Set(Object.keys(callerHeaders).map((name) => name.toLowerCase()));
   normalized.headers = {
-    ...request.defaultOptions.headers,
-    ...(definedOptions.headers || {})
+    ...Object.fromEntries(
+      Object.entries(request.defaultOptions.headers).filter(([name]) => !callerHeaderNames.has(name.toLowerCase()))
+    ),
+    ...callerHeaders
   };
   Object.defineProperties(normalized, {
     _headerLines: { value: getHeaderLines(normalized.headers) },
@@ -298,6 +302,20 @@ const sendRequest = (libcurl, url, cb) => {
     stopAttemptTimeout();
     libcurl._stopRequestTimeout();
     pipeError = createPipeError(cause);
+    if (libcurl.pipeTo && libcurl.pipeTo.length) {
+      for (const writableStream of libcurl.pipeTo) {
+        if (!writableStream.destroyed && typeof writableStream.destroy === 'function') {
+          // Leave the error listener attached: destroy(error) emits 'error' on
+          // the next tick and an unhandled emission would crash the process.
+          streamErrorListeners.delete(writableStream);
+          try {
+            writableStream.destroy(pipeError);
+          } catch (writableStreamError) {
+            libcurl._debug('writableStream.destroy(pipeError) throw an exception', writableStreamError);
+          }
+        }
+      }
+    }
     cleanupStreamListeners();
     setImmediate(() => {
       closeCurl(curl);
@@ -324,7 +342,8 @@ const sendRequest = (libcurl, url, cb) => {
   }, opts.timeout + 1000);
 
   if (opts.rawBody) {
-    curl.enable(CurlFeature.Raw);
+    // Keep header parsing so response.headers stays populated; only body stays raw.
+    curl.enable(CurlFeature.NoDataParsing);
   }
 
   if (opts.noStorage) {
@@ -522,9 +541,12 @@ const sendRequest = (libcurl, url, cb) => {
         return;
       }
 
-      const onStreamEnd = (writableStreamError) => {
+      const onStreamEnd = (writableStream, writableStreamError) => {
         if (writableStreamError) {
           pipeError ||= createPipeError(writableStreamError);
+          // The stream may still emit 'error' on a later tick. Keep the
+          // listener so the emission is consumed instead of crashing.
+          streamErrorListeners.delete(writableStream);
         }
         if (++i === writableStreams.length) {
           finish();
@@ -533,11 +555,11 @@ const sendRequest = (libcurl, url, cb) => {
       for (const writableStream of writableStreams) {
         libcurl._debug({'writableStream.destroyed': writableStream.destroyed});
         try {
-          writableStream.end('', 'utf8', onStreamEnd);
+          writableStream.end('', 'utf8', (writableStreamError) => onStreamEnd(writableStream, writableStreamError));
         } catch (writableStreamError) {
           libcurl._debug('writableStream.end(\'\', \'utf8\', onStreamEnd) throw an exception', writableStreamError);
           pipeError ||= createPipeError(writableStreamError);
-          onStreamEnd();
+          onStreamEnd(writableStream);
         }
       }
     } else {

@@ -30,7 +30,7 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | `form` | `string \| object` | Request payload. Strings, including an empty string, get form URL-encoded content type; objects are JSON-stringified and get JSON content type unless header overrides it. |
 | `upload` | `number` | Non-negative integer file descriptor used as libcurl upload input. Do not combine with `form`; `form` takes precedence. Uploads do not retry because a consumed descriptor cannot be replayed safely. |
 | `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. |
-| `headers` | `Record<string, HeaderValue>` | Merges with default headers. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
+| `headers` | `Record<string, HeaderValue>` | Merges with default headers; names match case-insensitively, so `content-type` replaces a default `Content-Type`. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
 | `debug` | `boolean` | Enables request debug output. |
 | `timeout` | `number` | Per-attempt timeout in milliseconds. |
 | `keepAlive` | `boolean` | Enables TCP keepalive probes. |
@@ -38,7 +38,7 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | `maxRedirects` | `number` | Non-negative integer redirect limit. |
 | `badStatuses` | `number[]` | Statuses passed to `isBadStatus`. |
 | `isBadStatus` | `(statusCode, badStatuses?) => boolean` | Decides whether a response status can retry. |
-| `rawBody` | `boolean` | Enables raw libcurl body handling. Use `onHeader()` for headers. |
+| `rawBody` | `boolean` | Returns `body` as a `Buffer` instead of a string. `headers` stays parsed; `onHeader()` still receives raw header lines. |
 | `noStorage` | `boolean` | Disables accumulated response body and headers. Use `onData()` and `onHeader()`. |
 | `wait` | `boolean` | Defers sending until `send()` or `sendAsync()`. |
 | `proxy` | `string \| boolean` | Proxy URL, or `true` to use request origin as proxy. |
@@ -77,7 +77,7 @@ See [Retries and errors](./retries-and-errors.md).
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.
 
-Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, library calls `destroy(error)` when a writable provides it. A writable with a string `path` may have that partial file removed.
+Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, or when one writable fails, library calls `destroy(error)` on every remaining writable that provides it. A writable with a string `path` may have that partial file removed.
 
 ## Response
 
