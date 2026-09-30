@@ -3,6 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import request, { requestAsync } from '../index.js';
+import './helpers/node26.js';
 import querystring from 'node:querystring';
 
 import { assert } from 'chai';

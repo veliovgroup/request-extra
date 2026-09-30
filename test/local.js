@@ -4,6 +4,7 @@ import { closeSync, openSync, readFileSync } from 'node:fs';
 import { describe, it } from 'mocha';
 import request, { requestAsync } from '../index.js';
 import { createLocalServer, waitFor } from './helpers/local-server.js';
+import { isNode26 } from './helpers/node26.js';
 
 describe('local runtime', () => {
   it('exports callback and async request functions', () => {
@@ -291,7 +292,8 @@ describe('local runtime', () => {
     }
   });
 
-  it('uploads from file descriptor zero', async () => {
+  // On Node.js 26, node-libcurl fd uploads wait until timeout (JCMais/node-libcurl#454).
+  (isNode26 ? it.skip : it)('uploads from file descriptor zero', async () => {
     const { spawn } = await import('node:child_process');
     const file = new URL('./bb.jpg', import.meta.url);
     const expectedBytes = readFileSync(file).byteLength;
