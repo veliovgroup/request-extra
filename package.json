@@ -29,6 +29,7 @@
     "test": "npm run test:local && npm run test:types",
     "test:local": "cross-env SKIP_EXTERNAL=true mocha ./test/npm.js ./test/local.js",
     "test:external": "mocha ./test/npm.js",
+    "test:coverage": "c8 --include index.js --reporter text --reporter lcov npm run test:local",
     "test:types": "tsc -p test/tsconfig.node.json --noEmit && tsc -p test/tsconfig.node-cjs.json --noEmit && tsc -p test/tsconfig.bun.json --noEmit",
     "test:bun": "bun test ./test/bun.test.js",
     "test:packed": "node ./test/packed-package.mjs",
@@ -88,6 +89,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@eslint/js": "^10.0.1",
+    "c8": "^12.0.0",
     "chai": "^6.2.2",
     "cross-env": "^10.1.0",
     "eslint": "^10.11.0",

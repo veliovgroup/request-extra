@@ -15,6 +15,7 @@ npm run test:external    # same suite with httpbin.org / badssl.com cases enable
 npm run test:types       # tsc over test/tsconfig.{node,node-cjs,bun}.json
 npm run test:package     # pack tarball, install into test/package-consumer, run runtime + type checks, then attw
 npm run test:bun         # compatibility probe only; expected to fail until Bun fixes libuv gaps
+npm run test:coverage    # c8 over test:local; writes coverage/lcov.info
 npm run lint             # eslint
 npm run lint:package     # publint
 npm run build            # rollup index.js -> index.cjs
@@ -49,7 +50,7 @@ TLS verification (`rejectUnauthorized`, `rejectUnauthorizedProxy`) defaults to `
 
 ## CI
 
-`.github/workflows/ci.yml` runs on PRs and pushes to `master`: Ubuntu matrix (Node 22.14.0, 24, 26) runs lint, test, build, audit, publint, packed-package checks, and pack dry-run; macOS and Windows run `test:local` on Node 24 as a native-install smoke; a `continue-on-error` Bun probe runs `test:bun`. `external.yml` runs `test:external` weekly and on manual dispatch. Actions are pinned by SHA. Details in `docs/ci-plan.md`.
+`.github/workflows/ci.yml` runs on PRs and pushes to `master`: Ubuntu matrix (Node 22.14.0, 24, 26) runs lint, test, build, audit, publint, packed-package checks, and pack dry-run; macOS, Windows, and a `node:24-alpine` container run `test:local` as native-install smokes (Alpine covers the musl prebuilt); a `continue-on-error` Bun probe runs `test:bun`. `external.yml` runs `test:external` weekly and on manual dispatch. Actions are pinned by SHA. Details in `docs/ci-plan.md`.
 
 `npm audit` findings usually come from `node-libcurl` install-time dependencies (`node-gyp`, `rimraf`), not runtime code. Root `overrides` in `package.json` pin patched versions for this repo only; they do not propagate to consumers.
 
