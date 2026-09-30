@@ -86,6 +86,15 @@ npm rebuild node-libcurl
 
 After any native rebuild, run package tests in target environment.
 
+## Windows install time
+
+`node-libcurl` 5.1.2 runs a `preinstall` script on Windows that clones vcpkg and builds libcurl from source before `node-pre-gyp` downloads the prebuilt binary. A cold install takes about 25 minutes and needs git plus Visual Studio build tools, even though the prebuilt binary is what ends up loaded. To reuse work across installs:
+
+- Set `VCPKG_ROOT` to an existing vcpkg checkout with a bootstrapped `vcpkg.exe`.
+- Set `NODE_LIBCURL_VCPKG_INSTALLED_ROOT` to a short, stable path and cache it. The repository CI does this keyed by `package-lock.json`.
+
+macOS and Linux installs skip this step.
+
 ## Node.js 22.14 and older
 
 `node-libcurl` 5.1.2 calls `tls.getCACertificates()` while loading, and that function first shipped in Node.js 22.15.0. On Node.js 22.14 and older the addon fails to load with:
