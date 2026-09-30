@@ -13,7 +13,7 @@ Small callback and Promise wrapper around `node-libcurl` for server-side transfe
 npm install request-libcurl
 ```
 
-Requires Node.js 22.14 or newer. Bun runtime is not supported because `node-libcurl` currently requires unsupported libuv APIs.
+Requires Node.js 22.15 or newer. Bun runtime is not supported because `node-libcurl` currently requires unsupported libuv APIs.
 
 ## Quick start
 

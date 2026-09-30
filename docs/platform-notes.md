@@ -86,6 +86,17 @@ npm rebuild node-libcurl
 
 After any native rebuild, run package tests in target environment.
 
+## Node.js 22.14 and older
+
+`node-libcurl` 5.1.2 calls `tls.getCACertificates()` while loading, and that function first shipped in Node.js 22.15.0. On Node.js 22.14 and older the addon fails to load with:
+
+```text
+Error: Invalid argument
+    at Object..node (node:internal/modules/cjs/loader)
+```
+
+`node-libcurl` declares `node >= 22.14`, so `npm install` does not warn. Upgrade to Node.js 22.15 or newer.
+
 ## Node.js 26
 
 `node-libcurl` 5.1.2 ships a prebuilt binary for Node.js 26, but every transfer waits about one second before completing. A raw `curly.get()` to a local server takes 5 ms on Node.js 24 and about 1000 ms on Node.js 26.10.0, so the delay is in the addon's event-loop integration, not in `request-libcurl`. Retry timing tests fail on Node.js 26 for this reason. CI keeps the Node.js 26 job informational until upstream resolves it. Use Node.js 22 or 24 in production.

@@ -27,8 +27,8 @@
     "build": "rollup --config rollup.config.js",
     "prepack": "npm run build",
     "test": "npm run test:local && npm run test:types",
-    "test:local": "cross-env SKIP_EXTERNAL=true mocha ./test/npm.js ./test/local.js",
-    "test:external": "mocha ./test/npm.js",
+    "test:local": "cross-env SKIP_EXTERNAL=true mocha --fail-zero ./test/npm.js ./test/local.js",
+    "test:external": "mocha --fail-zero ./test/npm.js",
     "test:coverage": "c8 --include index.js --reporter text --reporter lcov npm run test:local",
     "test:types": "tsc -p test/tsconfig.node.json --noEmit && tsc -p test/tsconfig.node-cjs.json --noEmit && tsc -p test/tsconfig.bun.json --noEmit",
     "test:bun": "bun test ./test/bun.test.js",
@@ -79,7 +79,7 @@
   ],
   "author": "dr.dimitru (https://veliovgroup.com)",
   "engines": {
-    "node": ">=22.14"
+    "node": ">=22.15"
   },
   "license": "BSD-3-Clause",
   "bugs": {

@@ -2,7 +2,7 @@
 
 ## Runtime
 
-Version 5 requires Node.js 22.14 or newer and `node-libcurl` 5.1.2 or newer. Bun remains unsupported because its libuv compatibility layer cannot load `node-libcurl`.
+Version 5 requires Node.js 22.15 or newer and `node-libcurl` 5.1.2 or newer. Bun remains unsupported because its libuv compatibility layer cannot load `node-libcurl`.
 
 ## Imports
 

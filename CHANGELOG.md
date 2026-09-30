@@ -12,6 +12,6 @@
 - When one `pipeTo` writable fails, remaining writables are destroyed with the same error, and late writable errors no longer crash the process.
 - Retries now default to safe or idempotent methods and transient statuses. Add a method to `retryMethods` to opt in.
 - TLS certificate verification remains disabled by default. Enable `rejectUnauthorized` and `rejectUnauthorizedProxy` for trusted HTTPS verification.
-- Requires Node.js 22.14 or newer.
+- Requires Node.js 22.15 or newer.
 
 See [v5 migration guide](./docs/migration-v5.md) and full change-log at [releases on GitHub](https://github.com/veliovgroup/request-extra/releases).

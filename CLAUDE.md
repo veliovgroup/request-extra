@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`request-libcurl` (repo name `request-extra`): a single-file callback and Promise wrapper around the `node-libcurl` native addon. Published to npm as `request-libcurl`. Node.js >= 22.14 only; Bun is blocked upstream (see `docs/platform-notes.md`).
+`request-libcurl` (repo name `request-extra`): a single-file callback and Promise wrapper around the `node-libcurl` native addon. Published to npm as `request-libcurl`. Node.js >= 22.15 only; Bun is blocked upstream (see `docs/platform-notes.md`).
 
 ## Commands
 
@@ -50,7 +50,7 @@ TLS verification (`rejectUnauthorized`, `rejectUnauthorizedProxy`) defaults to `
 
 ## CI
 
-`.github/workflows/ci.yml` runs on PRs and pushes to `master`: Ubuntu matrix (Node 22.14.0, 24, 26) runs lint, test, build, audit, publint, packed-package checks, and pack dry-run; macOS, Windows, and a `node:24-alpine` container run `test:local` as native-install smokes (Alpine covers the musl prebuilt); a `continue-on-error` Bun probe runs `test:bun`. `external.yml` runs `test:external` weekly and on manual dispatch. Actions are pinned by SHA. Details in `docs/ci-plan.md`.
+`.github/workflows/ci.yml` runs on PRs and pushes to `master`: Ubuntu matrix (Node 22.15.0, 24, 26) runs lint, test, build, audit, publint, packed-package checks, and pack dry-run; macOS, Windows, and a `node:24-alpine` container run `test:local` as native-install smokes (Alpine covers the musl prebuilt); a `continue-on-error` Bun probe runs `test:bun`. `external.yml` runs `test:external` weekly and on manual dispatch. Actions are pinned by SHA. Details in `docs/ci-plan.md`.
 
 `npm audit` findings usually come from `node-libcurl` install-time dependencies (`node-gyp`, `rimraf`), not runtime code. Root `overrides` in `package.json` pin patched versions for this repo only; they do not propagate to consumers.
 
