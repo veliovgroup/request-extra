@@ -292,7 +292,7 @@ describe('local runtime', () => {
     }
   });
 
-  // node-libcurl file-descriptor uploads stall on Node.js 26 (docs/platform-notes.md).
+  // On Node.js 26, node-libcurl fd uploads wait until timeout (JCMais/node-libcurl#454).
   (isNode26 ? it.skip : it)('uploads from file descriptor zero', async () => {
     const { spawn } = await import('node:child_process');
     const file = new URL('./bb.jpg', import.meta.url);
