@@ -86,6 +86,10 @@ npm rebuild node-libcurl
 
 After any native rebuild, run package tests in target environment.
 
+## Node.js 26
+
+`node-libcurl` 5.1.2 ships a prebuilt binary for Node.js 26, but every transfer waits about one second before completing. A raw `curly.get()` to a local server takes 5 ms on Node.js 24 and about 1000 ms on Node.js 26.10.0, so the delay is in the addon's event-loop integration, not in `request-libcurl`. Retry timing tests fail on Node.js 26 for this reason. CI keeps the Node.js 26 job informational until upstream resolves it. Use Node.js 22 or 24 in production.
+
 ## Bun
 
 Bun 1.3.14 crashes when `node-libcurl` calls unsupported `uv_timer_init`; Bun 1.4.0 fails while loading addon. Runtime support remains blocked by [Bun libuv issue #18546](https://github.com/oven-sh/bun/issues/18546). `npm run test:bun` is compatibility probe and intentionally remains outside default test command.

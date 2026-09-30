@@ -11,6 +11,9 @@ permissions:
 jobs:
   node:
     runs-on: ubuntu-latest
+    # Node 26 stays informational: node-libcurl 5.1.2 adds ~1 s of idle
+    # time to every transfer on Node 26 (see docs/platform-notes.md).
+    continue-on-error: ${{ matrix.node == 26 }}
     strategy:
       fail-fast: false
       matrix:
