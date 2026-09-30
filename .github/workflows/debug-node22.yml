@@ -31,3 +31,17 @@ jobs:
           node -e "process.dlopen(module, '/tmp/consumer/root-copy.node'); console.log('root copy in /tmp ok')" || true
           mkdir -p $GITHUB_WORKSPACE/wsconsumer && cp node_modules/node-libcurl/lib/binding/node_libcurl.node $GITHUB_WORKSPACE/wsconsumer/
           node -e "process.dlopen(module, '$GITHUB_WORKSPACE/wsconsumer/node_libcurl.node'); console.log('consumer copy in workspace ok')" || true
+      - run: |
+          set -x
+          sudo apt-get install -y -qq strace >/dev/null 2>&1 || true
+          env | grep -iE '^(node|npm)' || true
+          C=/tmp/consumer/node_modules/node-libcurl
+          W=$GITHUB_WORKSPACE/node_modules/node-libcurl
+          cd $GITHUB_WORKSPACE && node -e "require('$C'); console.log('A: consumer pkg from workspace cwd ok')" || echo "A failed"
+          cd /tmp/consumer && node -e "require('$W'); console.log('B: workspace pkg from /tmp cwd ok')" || echo "B failed"
+          cd $GITHUB_WORKSPACE && node -e "require('$W'); console.log('C: workspace pkg from workspace cwd ok')" || echo "C failed"
+          cd /tmp/consumer && node -e "globalThis.__libcurlTls=require('node:tls'); process.dlopen(module, '$C/lib/binding/node_libcurl.node'); console.log('D: tls global ok')" || echo "D failed"
+          cd /tmp/consumer && node -e "globalThis.__libcurlTls=require('node:tls'); globalThis.__libcurlCurlEasyError=require('$C/dist/CurlEasyError').CurlEasyError; globalThis.__libcurlCurlMultiError=require('$C/dist/CurlMultiError').CurlMultiError; globalThis.__libcurlCurlSharedError=require('$C/dist/CurlSharedError').CurlSharedError; process.dlopen(module, '$C/lib/binding/node_libcurl.node'); console.log('E: all globals ok')" || echo "E failed"
+          cd /tmp/consumer && strace -f -o /tmp/st.txt node -e "require('$C')" || true
+          grep -nE "EINVAL" /tmp/st.txt | tail -20 || true
+          grep -nE "^[0-9]+ +(openat|readlink|access).*(tls|cert|ssl|curl)" /tmp/st.txt | tail -20 || true
