@@ -108,12 +108,12 @@ Error: Invalid argument
 
 ## Node.js 26
 
-`node-libcurl` 5.1.2 ships a prebuilt binary for Node.js 26, but its libuv integration sometimes fails to wake the event loop. A transfer then finishes only when libcurl's fallback timer fires about one second later. Transfers to a remote server, or to a server in another process, run at normal speed. Two cases are affected on Node.js 26.10.0:
+`node-libcurl` 5.1.2 ships a prebuilt binary for Node.js 26, but a finished transfer does not reach JavaScript until some other JavaScript callback runs in the process ([node-libcurl#454](https://github.com/JCMais/node-libcurl/issues/454)). libcurl has already received the full response by then. A busy process hides the problem, because timers and I/O run JavaScript often. An idle process can wait much longer:
 
 - A server in the same process as the client. After the first transfer, each request that reuses the keep-alive connection takes about 1000 ms instead of about 1 ms. Setting `curlOptions: { FORBID_REUSE: true }` avoids the delay.
-- File-descriptor uploads (`upload: fd`). The upload stalls until `timeout`, then `node-libcurl` throws an uncaught `Curl handle is closed` error from its `end` handler. No workaround is known.
+- File-descriptor uploads (`upload: fd`) with nothing else running. The request waits until `timeout`. `node-libcurl` then throws an uncaught `Curl handle is closed` error from its `end` handler.
 
-Any other timer or I/O activity in the process hides both problems, because it keeps the event loop waking up. The test suite sets `FORBID_REUSE` on Node.js 26 (`test/helpers/node26.js`) and skips the file-descriptor upload test there. Do not use `upload` on Node.js 26.
+The test suite sets `FORBID_REUSE` on Node.js 26 (`test/helpers/node26.js`) and skips the file-descriptor upload test there. Use Node.js 22 or 24 in production until upstream fixes this.
 
 ## Bun
 
