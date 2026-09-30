@@ -1,19 +1,19 @@
-# Deferred CI Plan
-
-No workflow is added yet.
+# CI checks
 
 ## Required pull-request checks
 
-1. Run `npm ci`, `npm test`, `npm audit`, and `npm pack --dry-run` on Ubuntu with Node.js 22.14, latest 24 LTS, and latest 26 Current.
-2. Run native install and local-request smoke tests on macOS and Windows with latest Node.js 24 LTS.
-3. Split deterministic local tests from external `httpbin` and `badssl.com` tests. Keep local suite required; run external suite on schedule and manual dispatch to reduce unrelated pull-request failures.
+1. Ubuntu runs lint, tests, build, production audit, package lint, packed consumer checks, and package dry-run on Node.js 22.14, latest 24 LTS, and latest 26 Current.
+2. macOS and Windows run native install and local-request smoke tests on latest Node.js 24 LTS.
+3. Deterministic local tests remain required. External `httpbin` and `badssl.com` tests run weekly and by manual dispatch to avoid unrelated pull-request failures.
 
 ## Bun compatibility gate
 
-Run `npm run test:bun` with latest stable Bun as informational `continue-on-error` job. Optionally probe Bun canary on schedule. Make job required and add `engines.bun` only after native addon loads and local request test passes.
+CI runs `npm run test:bun` with latest stable Bun as an informational `continue-on-error` job. Make job required and add `engines.bun` only after native addon loads and local request test passes.
 
 ## Maintenance
 
 Use dependency update automation for production and development dependencies. Require full Node matrix for `node-libcurl` updates because native binary availability varies by Node ABI and platform.
 
-Root override pins `brace-expansion@2` to patched 2.1.4 for repository installs. Published npm overrides do not control consumer dependency trees. Remove override after `node-libcurl` updates its install-time `rimraf` dependency; until then, consumer applications can apply same root override.
+Root overrides pin `brace-expansion@2`, `brace-expansion@5`, and `undici@6` to patched versions for repository installs. Published npm overrides do not control consumer dependency trees. `brace-expansion@2` and `undici@6` come from `node-libcurl` install-time dependencies (`rimraf`, `node-gyp`); remove those overrides after `node-libcurl` updates them. Until then, consumer applications can apply the same root overrides.
+
+Production audit fails only on `critical` advisories because install-time tooling inside `node-libcurl` regularly picks up `high` advisories that do not affect runtime code. Dependabot alerts still surface every advisory.
