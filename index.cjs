@@ -280,18 +280,31 @@ const sendRequest = (libcurl, url, cb) => {
   const cleanupStreamListeners = (abortCause) => {
     if (abortCause) {
       finished = true;
-      for (const [writableStream, listener] of streamErrorListeners) {
-        if (typeof writableStream.destroy === 'function') {
+      for (const writableStream of libcurl.pipeTo) {
+        if (typeof writableStream.destroy !== 'function') continue;
+        const listener = streamErrorListeners.get(writableStream);
+        const release = () => {
+          removeStreamListener(writableStream, 'error', listener);
+          removeStreamListener(writableStream, 'error', release);
+          removeStreamListener(writableStream, 'close', release);
+        };
+        if (listener) {
           // Pending writes and destroy() may emit after abort has settled.
-          // Keep the error handler until teardown completes, even if destroy
-          // was already called by the writable itself.
+          // Either error or close releases both handlers, including when
+          // emitClose is false or destruction was already initiated.
           try {
-            writableStream.once('close', () => removeStreamListener(writableStream, 'error', listener));
-            if (!writableStream.destroyed) writableStream.destroy(abortCause);
-            streamErrorListeners.delete(writableStream);
+            writableStream.once('error', release);
+            writableStream.once('close', release);
           } catch (error) {
-            libcurl._debug('writableStream.destroy(abortCause) threw an exception', error);
+            libcurl._debug('Registering writable teardown listeners threw an exception', error);
           }
+          streamErrorListeners.delete(writableStream);
+        }
+        try {
+          if (!writableStream.destroyed) writableStream.destroy(abortCause);
+        } catch (error) {
+          release();
+          libcurl._debug('writableStream.destroy(abortCause) threw an exception', error);
         }
       }
     }

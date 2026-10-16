@@ -1851,7 +1851,31 @@ describe('local setup error cleanup', () => {
 });
 
 describe('local abort stream cleanup', () => {
-  for (const mode of ['write', 'final', 'destroying']) {
+  it('destroys writable-like destinations without event methods on abort', async () => {
+    let req;
+    let socket;
+    let destroyCause;
+    const sink = {
+      destroyed: false,
+      write() { setImmediate(() => req.abort()); return true; },
+      end() {},
+      destroy(cause) { this.destroyed = true; destroyCause = cause; }
+    };
+    const server = await createLocalServer((incoming, res) => { socket = incoming.socket; res.write('body'); });
+    try {
+      const error = await new Promise((resolve) => {
+        req = request({ url: server.url, pipeTo: sink, retry: false }, resolve);
+      });
+      strictAssert.equal(error.statusCode, 499);
+      strictAssert.equal(sink.destroyed, true);
+      strictAssert.equal(destroyCause.statusCode, 499);
+    } finally {
+      socket?.destroy();
+      await server.close();
+    }
+  });
+
+  for (const mode of ['write', 'final', 'destroying', 'no-close']) {
     it(`consumes pending writable errors after abort during ${mode}`, async () => {
       const { execFile } = await import('node:child_process');
       const { promisify } = await import('node:util');

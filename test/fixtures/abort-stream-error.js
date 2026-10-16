@@ -19,6 +19,7 @@ const abortDuringOperation = (callback) => {
   }, 20);
 };
 const sink = new Writable({
+  emitClose: mode !== 'no-close',
   write(_chunk, _encoding, callback) {
     if (mode === 'final') callback();
     else abortDuringOperation(callback);
