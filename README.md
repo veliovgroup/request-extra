@@ -55,6 +55,8 @@ request.defaultOptions.rejectUnauthorized = true;
 request.defaultOptions.rejectUnauthorizedProxy = true;
 ```
 
+ESM and CommonJS entry points share these defaults.
+
 ## Documentation
 
 - [API reference](https://github.com/veliovgroup/request-extra/blob/master/docs/api.md)

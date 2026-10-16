@@ -31,6 +31,7 @@ const listen = async (server) => {
 const backend = await createLocalServer((_req, res) => res.end('tls-ok'));
 const backendPort = Number(new URL(backend.url).port);
 const target = tls.createServer({ key, cert }, (socket) => {
+  track(socket);
   const upstream = track(net.connect(backendPort, '127.0.0.1'));
   socket.pipe(upstream).pipe(socket);
   socket.on('close', () => upstream.destroy());
@@ -48,6 +49,7 @@ try {
     }
   } else {
     proxy = tls.createServer({ key, cert }, (socket) => {
+      track(socket);
       let request = Buffer.alloc(0);
       const onData = (chunk) => {
         request = Buffer.concat([request, chunk]);

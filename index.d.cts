@@ -4,11 +4,12 @@ export type BinaryData = Uint8Array & { toString(encoding?: string): string };
 export interface WritableLike {
   destroyed?: boolean;
   path?: string;
+  flags?: string | number;
   write(chunk: unknown, encoding?: string, callback?: (error?: Error | null) => void): unknown;
   end(chunk?: unknown, encoding?: string, callback?: (error?: Error | null) => void): unknown;
   destroy?(error?: Error): unknown;
-  once?(event: 'drain' | 'error', listener: (...args: unknown[]) => void): this;
-  removeListener?(event: 'drain' | 'error', listener: (...args: unknown[]) => void): this;
+  once?(event: 'close' | 'drain' | 'error', listener: (...args: unknown[]) => void): this;
+  removeListener?(event: 'close' | 'drain' | 'error', listener: (...args: unknown[]) => void): this;
 }
 
 export interface RequestOptions {

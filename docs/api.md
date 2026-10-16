@@ -6,7 +6,7 @@ Default export: `request`. Named export: `requestAsync`.
 
 Types: `HeaderValue`, `BinaryData`, `WritableLike`, `RequestOptions`, `RequestInput`, `RequestDefaultOptions`, `Response`, `ResponseError`, `RequestCallback`, `DataCallback`, `HeaderCallback`, `LibCurlRequest`, and `RequestFunction`.
 
-`HeaderValue` is `string | number | boolean | null | undefined`. `BinaryData` is a `Uint8Array` with `toString(encoding?)`. `WritableLike` has `write()` and `end()` methods, with optional `destroy()`, `once()`, `removeListener()`, `destroyed`, and `path` members. Streams passed to `pipe()` or `pipeTo` must satisfy this shape.
+`HeaderValue` is `string | number | boolean | null | undefined`. `BinaryData` is a `Uint8Array` with `toString(encoding?)`. `WritableLike` has `write()` and `end()` methods, with optional `destroy()`, `once()`, `removeListener()`, `destroyed`, `path`, and `flags` members. The library listens for `close`, `drain`, and `error`. Streams passed to `pipe()` or `pipeTo` must satisfy this shape.
 
 `RequestCallback` receives `(error?: ResponseError, response?: Response)`. `DataCallback` and `HeaderCallback` each receive one `BinaryData` chunk. `RequestFunction` is callable as `request(opts, cb?)` and exposes `defaultOptions`.
 
@@ -29,7 +29,7 @@ Returns a `Promise<Response>` by default. Only an explicit `wait: true` returns 
 | `auth` | `string` | Basic-auth value in `username:password` form. |
 | `form` | `string \| object` | Request payload. Strings, including an empty string, get form URL-encoded content type; objects are JSON-stringified and get JSON content type unless header overrides it. |
 | `upload` | `number` | Non-negative integer file descriptor used as libcurl upload input. Do not combine with `form`; `form` takes precedence. Uploads do not retry because a consumed descriptor cannot be replayed safely. |
-| `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. |
+| `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. The response body is still kept in memory unless `noStorage: true`. |
 | `headers` | `Record<string, HeaderValue>` | Merges with default headers; names match case-insensitively, so `content-type` replaces a default `Content-Type`. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
 | `debug` | `boolean` | Enables request debug output. |
 | `timeout` | `number` | Per-attempt timeout in milliseconds, from `0` through `2147482647`. A JavaScript fallback aborts after `timeout + 1000` ms; `0` disables the native timeout but retains this 1000 ms fallback. |
@@ -67,7 +67,7 @@ See [Retries and errors](./retries-and-errors.md).
 
 `sent` reports whether `send()` has run. `finished` reports terminal completion. `opts` exposes normalized request options.
 
-- `.pipe(writableStream)` adds a writable destination, disables retries for that request, and returns request.
+- `.pipe(writableStream)` adds a writable destination, disables retries for that request, and returns request. The response body is still kept in memory unless `noStorage: true`.
 - `.onData(callback)` registers per-chunk response callback and returns request.
 - `.onHeader(callback)` registers per-header callback and returns request.
 - `.send()` starts request once and returns request.
@@ -77,9 +77,11 @@ See [Retries and errors](./retries-and-errors.md).
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.
 
-Register `.pipe()`, `.onData()`, and `.onHeader()` synchronously after construction or before sending a `wait: true` request. Registration after transfer setup starts throws instead of silently missing data. Use `wait: true` when setup crosses an asynchronous boundary.
+Register `.pipe()`, `.onData()`, and `.onHeader()` synchronously after construction or before sending a `wait: true` request. Registration after transfer setup starts throws instead of silently missing data. Use `wait: true` when setup crosses an asynchronous boundary. Registration on a request that settled before starting, such as one with an invalid URL or one aborted before sending, does nothing; the error arrives through the callback or Promise. A writable passed then is not ended or destroyed.
 
-Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, or when one writable fails, library calls `destroy(error)` on every remaining writable that provides it. A writable with a string `path` may have that partial file removed.
+`abort()` is safe to call from `onData()`, `onHeader()`, and writable `write()` callbacks. A Promise from `requestAsync()` without `wait: true` has no controller, so it cannot be aborted; use `wait: true` to keep the `LibCurlRequest`.
+
+Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, or when one writable fails, library calls `destroy(error)` on every remaining writable that provides it. After a transport failure, a writable with a string `path` and string `flags` of `w`, `wx`, `xw`, `w+`, `wx+`, or `xw+` has that partial file removed; `fs.createWriteStream()` defaults to `w`. Append (`a`), read-write (`r+`), numeric flags, and writables without `flags` keep their file.
 
 ## Response
 
@@ -125,4 +127,4 @@ request.defaultOptions = {
 };
 ```
 
-Change fields on `request.defaultOptions` to set process-wide defaults. TLS verification defaults remain disabled for compatibility.
+Change fields on `request.defaultOptions` to set process-wide defaults. ESM `import` and CommonJS `require()` share the same object, so a change made through either entry point applies to both. TLS verification defaults remain disabled for compatibility.

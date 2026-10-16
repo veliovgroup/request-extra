@@ -68,6 +68,21 @@ const closeCurl = (curl) => {
   }
 };
 
+// Close a handle from outside native callbacks. libcurl rejects handle removal
+// inside data and header callbacks. node-libcurl may also have queued its own
+// settlement, which calls onEnd()/onError() later (on Node 26, possibly much
+// later) and throws "Curl handle is closed" once the handle is gone. The
+// request has already settled, so disable that settlement for this instance.
+const closeCurlDeferred = (curl) => {
+  if (!curl) {
+    return;
+  }
+  curl.onEnd = noop;
+  curl.onError = noop;
+  curl.on?.('error', noop);
+  setImmediate(() => closeCurl(curl));
+};
+
 const HTTP_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 const getHeaderLines = (headers) => Object.entries(headers).map(([name, value]) => {
@@ -353,10 +368,8 @@ const sendRequest = (libcurl, url, cb) => {
       }
     }
     cleanupStreamListeners();
-    setImmediate(() => {
-      closeCurl(curl);
-      cb(pipeError);
-    });
+    closeCurlDeferred(curl);
+    setImmediate(() => cb(pipeError));
   };
 
   const resumeAfterDrain = (writableStream) => {
@@ -646,7 +659,10 @@ const sendRequest = (libcurl, url, cb) => {
           streamErrorListeners.delete(writableStream);
         }
 
-        if (writableStream.path && typeof writableStream.path === 'string') {
+        // Remove only files this download created or truncated. Append and
+        // read-write streams may hold data that predates the request.
+        if (writableStream.path && typeof writableStream.path === 'string'
+          && typeof writableStream.flags === 'string' && /^(?:wx?|xw)\+?$/.test(writableStream.flags)) {
           try {
             fs.unlinkSync(writableStream.path);
           } catch (e) {
@@ -744,7 +760,9 @@ const sendRequest = (libcurl, url, cb) => {
 
   curl.setOpt(nodeLibcurl.Curl.option.HTTPHEADER, customHeaders);
 
-  process.nextTick(() => {
+  // Ticks and microtasks queued by a native data or header callback still run
+  // inside it, where libcurl rejects new handles. Start from the check phase.
+  setImmediate(() => {
     if (!libcurl.finished && !finished) {
       try {
         curl.perform();
@@ -770,6 +788,9 @@ class LibCurlRequest {
         this._resolve = resolve;
         this._reject = reject;
       });
+      // A waiting request may settle (invalid URL, abort()) before the caller
+      // reaches sendAsync(). Callers still observe the rejection from there.
+      this.promise.catch(noop);
     }
 
     this.cb = typeof cb === 'function' ? cb : noop;
@@ -839,38 +860,41 @@ class LibCurlRequest {
     }
   }
 
-  _assertCanRegister() {
-    if (this._started || this.finished) {
+  _canRegister() {
+    if (this._started) {
       throw new Error('Register streaming handlers before the transfer starts; use wait: true for delayed setup');
     }
+    // Requests that settled before starting (invalid URL, early abort) report
+    // through the callback or Promise; keep chained registration harmless.
+    return !this.finished;
   }
 
   pipe(writableStream) {
-    this._assertCanRegister();
-    if (isWritableLike(writableStream)) {
-      this.pipeTo.push(writableStream);
-    } else {
+    if (!isWritableLike(writableStream)) {
       throw new TypeError('[request-libcurl] [.pipe()] method accepts only {stream.Writable}');
+    }
+    if (this._canRegister()) {
+      this.pipeTo.push(writableStream);
     }
     return this;
   }
 
   onData(callback) {
-    this._assertCanRegister();
-    if (typeof callback === 'function') {
-      this._onData = callback;
-    } else {
+    if (typeof callback !== 'function') {
       throw new TypeError('[request-libcurl] [.onData()] method accepts only {Function}');
+    }
+    if (this._canRegister()) {
+      this._onData = callback;
     }
     return this;
   }
 
   onHeader(callback) {
-    this._assertCanRegister();
-    if (typeof callback === 'function') {
-      this._onHeader = callback;
-    } else {
+    if (typeof callback !== 'function') {
       throw new TypeError('[request-libcurl] [.onHeader()] method accepts only {Function}');
+    }
+    if (this._canRegister()) {
+      this._onHeader = callback;
     }
     return this;
   }
@@ -1032,7 +1056,6 @@ class LibCurlRequest {
     this._stopAttemptTimeout();
     this._stopRequestTimeout();
     this._cleanupPipeListeners(this.finished ? undefined : Object.assign(new Error(abortError.message), abortError));
-    this.curl?.removeAllListeners?.();
 
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
@@ -1040,7 +1063,11 @@ class LibCurlRequest {
     }
 
     if (!this.finished) {
-      closeCurl(this.curl);
+      // abort() may run inside a native data or header callback. Settled
+      // requests skip this so a repeated abort() keeps the deferred close's
+      // error listener in place.
+      this.curl?.removeAllListeners?.();
+      closeCurlDeferred(this.curl);
 
       this.finished = true;
       if (this.opts.isPromise) {
@@ -1075,7 +1102,20 @@ async function requestAsync (opts) {
   return req.opts.wait ? req : req.promise;
 }
 
-request.defaultOptions = {
+// ESM and CommonJS entry points load separate module instances. Keep one
+// process-wide defaults object so settings such as TLS verification apply to both.
+const DEFAULT_OPTIONS_KEY = Symbol.for('request-libcurl@5.defaultOptions');
+if (!Object.hasOwn(globalThis, DEFAULT_OPTIONS_KEY)) {
+  Object.defineProperty(globalThis, DEFAULT_OPTIONS_KEY, { value: { current: null } });
+}
+const sharedDefaults = globalThis[DEFAULT_OPTIONS_KEY];
+Object.defineProperty(request, 'defaultOptions', {
+  enumerable: true,
+  get: () => sharedDefaults.current,
+  set: (value) => { sharedDefaults.current = value; }
+});
+
+const ownDefaults = {
   wait: false,
   proxy: false,
   retry: true,
@@ -1104,6 +1144,14 @@ request.defaultOptions = {
     Accept: '*/*'
   }
 };
+
+// Another 5.x copy may have created the shared object with fewer options.
+sharedDefaults.current ||= ownDefaults;
+for (const [option, value] of Object.entries(ownDefaults)) {
+  if (!Object.hasOwn(sharedDefaults.current, option)) {
+    sharedDefaults.current[option] = value;
+  }
+}
 
 exports.default = request;
 exports.requestAsync = requestAsync;
