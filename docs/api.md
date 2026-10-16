@@ -12,11 +12,11 @@ Types: `HeaderValue`, `BinaryData`, `WritableLike`, `RequestOptions`, `RequestIn
 
 ## `request(options, callback?)`
 
-Creates and returns a `LibCurlRequest`. Unless `wait: true`, it starts immediately. With callback form, success calls `callback(undefined, response)` and failure calls `callback(error)`.
+Creates and returns a `LibCurlRequest`. Unless `wait: true`, it schedules the transfer for the next tick. Synchronous chaining such as `request(options, callback).pipe(destination)` is supported. With callback form, success calls `callback(undefined, response)` and failure calls `callback(error)`.
 
 ## `requestAsync(options)`
 
-Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<LibCurlRequest>` without sending; register handlers, then call `sendAsync()`.
+Returns a `Promise<Response>` by default. Only an explicit `wait: true` returns `Promise<LibCurlRequest>` without sending; register handlers, then call `sendAsync()`. Unlike the callback API, `requestAsync()` ignores `request.defaultOptions.wait` so changing a global default cannot change its return shape or strand an unsent request.
 
 ## Request options
 
@@ -32,10 +32,10 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. |
 | `headers` | `Record<string, HeaderValue>` | Merges with default headers; names match case-insensitively, so `content-type` replaces a default `Content-Type`. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
 | `debug` | `boolean` | Enables request debug output. |
-| `timeout` | `number` | Per-attempt timeout in milliseconds. |
+| `timeout` | `number` | Per-attempt timeout in milliseconds, from `0` through `2147482647`. A JavaScript fallback aborts after `timeout + 1000` ms; `0` disables the native timeout but retains this 1000 ms fallback. |
 | `keepAlive` | `boolean` | Enables TCP keepalive probes. |
 | `followRedirect` | `boolean` | Follows redirects. |
-| `maxRedirects` | `number` | Non-negative integer redirect limit. |
+| `maxRedirects` | `number` | Non-negative safe integer redirect limit. |
 | `badStatuses` | `number[]` | Statuses passed to `isBadStatus`. |
 | `isBadStatus` | `(statusCode, badStatuses?) => boolean` | Decides whether a response status can retry. |
 | `rawBody` | `boolean` | Returns `body` as a `Buffer` instead of a string. `headers` stays parsed; `onHeader()` still receives raw header lines. |
@@ -54,10 +54,10 @@ Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<Li
 | Option | Type | Meaning |
 | --- | --- | --- |
 | `retry` | `boolean` | Enables retries. |
-| `retries` | `number` | Non-negative integer number of additional attempts. |
-| `retryDelay` | `number` | Initial retry-delay ceiling in milliseconds. |
+| `retries` | `number` | Non-negative safe integer number of additional attempts. |
+| `retryDelay` | `number` | Initial retry-delay ceiling in milliseconds, from `0` through `2147483647`. |
 | `retryMethods` | `readonly string[]` | Methods eligible for retries. |
-| `retryMaxDelay` | `number` | Maximum retry delay in milliseconds. |
+| `retryMaxDelay` | `number` | Maximum retry delay in milliseconds, from `0` through `2147483647`. |
 | `retryJitter` | `boolean` | Randomizes each retry delay. |
 | `respectRetryAfter` | `boolean` | Uses valid `Retry-After` headers. |
 
@@ -72,10 +72,12 @@ See [Retries and errors](./retries-and-errors.md).
 - `.onHeader(callback)` registers per-header callback and returns request.
 - `.send()` starts request once and returns request.
 - `.sendAsync()` starts Promise-mode request once and returns its Promise, which resolves with `Response` or rejects with `ResponseError`.
-- `.abort()` aborts unfinished request and returns request.
+- `.abort()` aborts unfinished request, destroys active writable destinations that provide `destroy()`, and returns request. Writable error handlers remain attached until teardown completes.
 - `.abortAsync()` aborts unfinished Promise-mode request. It rejects with abort error when request is still active; after completion, it returns existing settled Promise.
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.
+
+Register `.pipe()`, `.onData()`, and `.onHeader()` synchronously after construction or before sending a `wait: true` request. Registration after transfer setup starts throws instead of silently missing data. Use `wait: true` when setup crosses an asynchronous boundary.
 
 Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, or when one writable fails, library calls `destroy(error)` on every remaining writable that provides it. A writable with a string `path` may have that partial file removed.
 

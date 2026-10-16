@@ -20,6 +20,16 @@ const { default: request, requestAsync } = require('request-libcurl');
 
 TypeScript resolves separate ESM and CommonJS declaration files through package export conditions. No type-only compatibility package is required.
 
+## Deferred Promise requests
+
+`requestAsync()` defers only when its caller supplies `wait: true`. A global `request.defaultOptions.wait = true` still defers callback requests, but no longer leaves ordinary Promise requests waiting on an inaccessible controller. This keeps the runtime return shape aligned with the TypeScript overloads.
+
+```js
+const pending = await requestAsync({ url: 'https://example.com', wait: true });
+pending.onData((chunk) => console.log(chunk.length));
+const response = await pending.sendAsync();
+```
+
 ## Retries
 
 `retries` counts additional attempts. Default `3` permits four total attempts.
@@ -39,7 +49,7 @@ Requests using `upload`, `pipeTo`, `.pipe()`, `onData()`, or `onHeader()` do not
 
 ## Validation
 
-Version 5 rejects malformed header names, CR/LF header values, invalid HTTP method tokens, unknown Curl options or features, fractional retry or redirect counts, and invalid upload descriptors before sending.
+Version 5 rejects malformed header names, CR/LF header values, invalid HTTP method tokens, unknown Curl options or features, unsafe or fractional retry and redirect counts, and invalid upload descriptors before sending. `timeout` must not exceed `2147482647` ms; retry delays must not exceed `2147483647` ms. See [timeout limits](./retries-and-errors.md#timeout-limits).
 
 Empty string forms and upload descriptor `0` are valid:
 
@@ -51,6 +61,12 @@ await requestAsync({
   retry: false
 });
 ```
+
+## Streaming and cancellation
+
+Synchronous `request(options, callback).pipe(destination)` chaining now receives the full response. `.pipe()`, `.onData()`, and `.onHeader()` throw if registered after transfer setup starts, rather than silently missing data. Use `wait: true` when setup needs asynchronous work.
+
+Aborting a transfer now destroys its active writable destinations that provide `destroy()`. Their error listeners remain attached through teardown so pending writes cannot crash the process after cancellation.
 
 ## TLS
 

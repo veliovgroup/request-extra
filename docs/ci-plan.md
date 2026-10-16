@@ -8,7 +8,7 @@
 
 ## Bun compatibility gate
 
-CI runs `npm run test:bun` with latest stable Bun as an informational `continue-on-error` job. Make job required and add `engines.bun` only after native addon loads and local request test passes.
+CI runs `npm run test:bun` with latest stable Bun as an informational probe. Only the test step uses `continue-on-error`: a failed probe emits a warning while the job succeeds. Setup and installation failures still fail the job. Remove the allowance and add `engines.bun` only after the native addon loads and the local request test passes.
 
 ## Maintenance
 

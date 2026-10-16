@@ -1552,6 +1552,341 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local timer bounds', () => {
+  for (const retry of [false, true]) {
+    it(`does not turn a large timeout into an immediate abort (retry: ${retry})`, async () => {
+      const server = await createLocalServer((_req, res) => setTimeout(() => res.end('ok'), 30));
+      try {
+        const response = await requestAsync({ url: server.url, timeout: 600_000_000, retry });
+        strictAssert.equal(response.body, 'ok');
+      } finally {
+        await server.close();
+      }
+    });
+  }
+
+  for (const [key, value] of [
+    ['timeout', 2_147_482_648],
+    ['retryDelay', 2_147_483_648],
+    ['retryMaxDelay', 2_147_483_648],
+    ['retries', Number.MAX_SAFE_INTEGER + 1],
+    ['maxRedirects', Number.MAX_SAFE_INTEGER + 1]
+  ]) {
+    it(`rejects ${key} above its supported range before sending`, () => {
+      strictAssert.throws(() => request({ url: 'http://127.0.0.1:1', wait: true, [key]: value }), TypeError);
+    });
+  }
+
+  it('keeps an oversized overall deadline across timer chunks and clears it on abort', async () => {
+    // Waiting 24 days is impractical. Mock only JS timers; native setup stays
+    // queued until after these synchronous assertions and cancellation.
+    const { mock } = await import('node:test');
+    mock.timers.enable({ apis: ['setTimeout'] });
+    let error;
+    let calls = 0;
+    const req = request({ url: 'http://127.0.0.1:1', wait: true, timeout: 600_000_000, retryMaxDelay: 0 }, (caught) => {
+      error = caught;
+      calls++;
+    });
+    try {
+      req.send();
+      mock.timers.tick(2_147_483_647);
+      strictAssert.equal(calls, 0);
+      req.abort();
+      mock.timers.tick(300_000_353);
+      strictAssert.equal(calls, 1);
+      strictAssert.equal(error.statusCode, 499);
+      strictAssert.equal(req.timeoutTimer, null);
+    } finally {
+      req.abort();
+      mock.timers.reset();
+    }
+  });
+
+  it('expires the overall deadline at the end of the final timer chunk', async () => {
+    const { mock } = await import('node:test');
+    mock.timers.enable({ apis: ['setTimeout'] });
+    let error;
+    const req = request({ url: 'http://127.0.0.1:1', wait: true, timeout: 600_000_000, retryMaxDelay: 0 }, (caught) => { error = caught; });
+    try {
+      req.send();
+      mock.timers.tick(2_147_483_647);
+      strictAssert.equal(error, undefined);
+      mock.timers.tick(252_520_352);
+      strictAssert.equal(error, undefined);
+      mock.timers.tick(1);
+      strictAssert.equal(error.statusCode, 499);
+    } finally {
+      req.abort();
+      mock.timers.reset();
+    }
+  });
+
+  for (const options of [{ retry: false }, { method: 'POST' }]) {
+    it(`uses one attempt in the fallback budget for ${JSON.stringify(options)}`, async () => {
+      const { mock } = await import('node:test');
+      mock.timers.enable({ apis: ['setTimeout'] });
+      let error;
+      const req = request({ url: 'http://127.0.0.1:1', wait: true, timeout: 10, ...options }, (caught) => { error = caught; });
+      try {
+        req.send();
+        mock.timers.tick(1010);
+        strictAssert.equal(error?.statusCode, 499);
+      } finally {
+        req.abort();
+        mock.timers.reset();
+      }
+    });
+  }
+});
+
+describe('local async wait defaults', () => {
+  for (const extra of [{}, { wait: undefined }, { wait: false }]) {
+    it(`sends Promise requests despite a global wait default (${Object.hasOwn(extra, 'wait') ? String(extra.wait) : 'omitted'})`, async () => {
+      const previous = request.defaultOptions.wait;
+      const server = await createLocalServer((_req, res) => res.end('sent'));
+      let timer;
+      try {
+        request.defaultOptions.wait = true;
+        const response = await Promise.race([
+          requestAsync({ url: server.url, retry: false, ...extra }),
+          new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error('request remained unsent')), 250); })
+        ]);
+        strictAssert.equal(response.body, 'sent');
+      } finally {
+        clearTimeout(timer);
+        request.defaultOptions.wait = previous;
+        await server.close();
+      }
+    });
+  }
+
+  it('keeps explicit Promise wait and callback wait defaults deferred', async () => {
+    const previous = request.defaultOptions.wait;
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => { attempts++; res.end('sent'); });
+    try {
+      request.defaultOptions.wait = true;
+      const asyncReq = await requestAsync({ url: server.url, wait: true, retry: false });
+      const callbackResult = new Promise((resolve, reject) => {
+        const req = request({ url: server.url, retry: false }, (error, response) => error ? reject(error) : resolve(response));
+        strictAssert.equal(req.sent, false);
+        req.send();
+      });
+      strictAssert.equal(asyncReq.sent, false);
+      strictAssert.equal(attempts, 0);
+      strictAssert.equal((await asyncReq.sendAsync()).body, 'sent');
+      strictAssert.equal((await callbackResult).body, 'sent');
+      strictAssert.equal(attempts, 2);
+    } finally {
+      request.defaultOptions.wait = previous;
+      await server.close();
+    }
+  });
+
+  it('does not bypass validation for an explicit null wait', async () => {
+    await strictAssert.rejects(requestAsync({ url: 'http://127.0.0.1:1', wait: null }), TypeError);
+  });
+});
+
+describe('local streaming registration', () => {
+  it('delivers body and headers to immediately chained handlers and writables', async () => {
+    const { Writable } = await import('node:stream');
+    const body = [];
+    const data = [];
+    const headers = [];
+    const sink = new Writable({ write(chunk, _encoding, callback) { body.push(chunk); callback(); } });
+    const server = await createLocalServer((_req, res) => res.end('hello'));
+    try {
+      await new Promise((resolve, reject) => {
+        request({ url: server.url, noStorage: true, retry: false }, (error) => error ? reject(error) : resolve())
+          .pipe(sink)
+          .onData((chunk) => data.push(chunk))
+          .onHeader((chunk) => headers.push(chunk));
+      });
+      strictAssert.equal(Buffer.concat(body).toString(), 'hello');
+      strictAssert.equal(Buffer.concat(data).toString(), 'hello');
+      strictAssert.match(Buffer.concat(headers).toString(), /HTTP\/1\.1 200/);
+      strictAssert.equal(sink.writableFinished, true);
+    } finally {
+      sink.destroy();
+      await server.close();
+    }
+  });
+
+  it('handles errors from an immediately chained writable', async () => {
+    const { Writable } = await import('node:stream');
+    const cause = new Error('disk failure');
+    const sink = new Writable({ write(chunk, _encoding, callback) { callback(chunk.length ? cause : undefined); } });
+    const server = await createLocalServer((_req, res) => res.end('body'));
+    try {
+      const error = await new Promise((resolve) => {
+        request({ url: server.url, retry: false }, resolve).pipe(sink);
+      });
+      strictAssert.equal(error?.errorCode, 23);
+      strictAssert.equal(error.cause, cause);
+    } finally {
+      sink.destroy();
+      await server.close();
+    }
+  });
+
+  it('rejects streaming registration once a transfer has started', async () => {
+    const server = await createLocalServer((_req, res) => res.write('body'));
+    const req = await requestAsync({ url: server.url, wait: true, retry: false });
+    const sent = req.sendAsync();
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      for (const register of [
+        () => req.pipe({ write() {}, end() {} }),
+        () => req.onData(() => {}),
+        () => req.onHeader(() => {})
+      ]) {
+        strictAssert.throws(register, /before.*transfer|wait: true/);
+      }
+    } finally {
+      const aborted = req.abortAsync();
+      await strictAssert.rejects(sent, { statusCode: 499 });
+      await strictAssert.rejects(aborted, { statusCode: 499 });
+      await server.close();
+    }
+  });
+
+  it('does not transfer when an immediately chained request is aborted', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => { attempts++; res.end(); });
+    try {
+      const error = await new Promise((resolve) => {
+        request({ url: server.url, retry: false }, resolve).onData(() => {}).abort();
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      strictAssert.equal(error.statusCode, 499);
+      strictAssert.equal(attempts, 0);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('local HEAD semantics', () => {
+  for (const rawBody of [false, true]) {
+    it(`completes HEAD with a nonzero content length (rawBody: ${rawBody})`, async () => {
+      const methods = [];
+      const server = await createLocalServer((req, res) => {
+        methods.push(req.method);
+        res.setHeader('Content-Length', '5');
+        res.end('hello');
+      });
+      try {
+        const response = await requestAsync({ url: server.url, method: 'HEAD', rawBody, retry: false, timeout: 100 });
+        strictAssert.equal(response.statusCode, 200);
+        strictAssert.equal(response.headers['content-length'], '5');
+        strictAssert.equal(response.body.length, 0);
+        strictAssert.deepEqual(methods, ['HEAD']);
+      } finally {
+        await server.close();
+      }
+    });
+  }
+});
+
+describe('local retry payload stability', () => {
+  for (const contentType of [undefined, 'application/vnd.example+json']) {
+    it(`preserves JSON bytes and content type across retries (${contentType ?? 'automatic'})`, async () => {
+      const received = [];
+      let serializations = 0;
+      const server = await createLocalServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+          received.push({ body, contentType: req.headers['content-type'] });
+          res.statusCode = received.length === 1 ? 503 : 200;
+          res.end('ok');
+        });
+      });
+      try {
+        const response = await requestAsync({
+          url: server.url,
+          method: 'PUT',
+          form: { toJSON() { serializations++; return { attempt: serializations }; } },
+          headers: contentType ? { 'Content-Type': contentType } : {},
+          retries: 1,
+          retryDelay: 0
+        });
+        strictAssert.equal(response.statusCode, 200);
+        strictAssert.equal(serializations, 1);
+        strictAssert.deepEqual(received, [
+          { body: '{"attempt":1}', contentType: contentType ?? 'application/json' },
+          { body: '{"attempt":1}', contentType: contentType ?? 'application/json' }
+        ]);
+      } finally {
+        await server.close();
+      }
+    });
+  }
+});
+
+describe('local setup error cleanup', () => {
+  for (const value of [true, 1]) {
+    it(`serializes Accept-Encoding header value ${value}`, async () => {
+      const server = await createLocalServer((req, res) => res.end(req.headers['accept-encoding']));
+      try {
+        const response = await requestAsync({ url: server.url, headers: { 'Accept-Encoding': value }, retry: false });
+        strictAssert.equal(response.body, String(value));
+      } finally {
+        await server.close();
+      }
+    });
+  }
+  for (const mode of ['callback', 'promise']) {
+    it(`settles native setup exceptions through ${mode} API without leaking timers`, async () => {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { stdout } = await promisify(execFile)(process.execPath, [
+        'test/fixtures/setup-error.js', mode
+      ], { timeout: 750 });
+      strictAssert.match(stdout, /setup-error-ok/);
+    });
+  }
+});
+
+describe('local abort stream cleanup', () => {
+  it('destroys writable-like destinations without event methods on abort', async () => {
+    let req;
+    let socket;
+    let destroyCause;
+    const sink = {
+      destroyed: false,
+      write() { setImmediate(() => req.abort()); return true; },
+      end() {},
+      destroy(cause) { this.destroyed = true; destroyCause = cause; }
+    };
+    const server = await createLocalServer((incoming, res) => { socket = incoming.socket; res.write('body'); });
+    try {
+      const error = await new Promise((resolve) => {
+        req = request({ url: server.url, pipeTo: sink, retry: false }, resolve);
+      });
+      strictAssert.equal(error.statusCode, 499);
+      strictAssert.equal(sink.destroyed, true);
+      strictAssert.equal(destroyCause.statusCode, 499);
+    } finally {
+      socket?.destroy();
+      await server.close();
+    }
+  });
+
+  for (const mode of ['write', 'final', 'destroying', 'no-close']) {
+    it(`consumes pending writable errors after abort during ${mode}`, async () => {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { stdout } = await promisify(execFile)(process.execPath, [
+        'test/fixtures/abort-stream-error.js', mode
+      ], { timeout: 5000 });
+      strictAssert.match(stdout, /abort-stream-ok/);
+    });
+  }
+});
+
 describe('local stream failure guard', () => {
   it('ignores remaining native chunks after synchronous writable failure', async () => {
     let writes = 0;

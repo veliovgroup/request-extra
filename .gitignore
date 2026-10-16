@@ -1,6 +1,13 @@
 .npm/
 .DS_Store
+._*
 Thumbs.db
+Desktop.ini
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.template
 .eslintcache
 .idea/
 .vscode/

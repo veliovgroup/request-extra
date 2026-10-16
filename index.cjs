@@ -8,6 +8,7 @@ const nodeLibcurl = require('node-libcurl');
 
 const SSL_ERROR_CODES = [35, 58, 60, 83, 90, 91];
 const NON_RETRYABLE_ERROR_CODES = [3, 4, 23, 42, 43, 47];
+const MAX_TIMER_DELAY = 2_147_483_647;
 
 const badUrlError = {
   code: 3,
@@ -174,21 +175,22 @@ const normalizeOptions = (opts) => {
   if (typeof normalized.method !== 'string' || !HTTP_TOKEN.test(normalized.method)) {
     throw new TypeError('{opts.method} expecting a valid HTTP token');
   }
-  for (const key of ['timeout', 'retryDelay']) {
+  for (const key of ['timeout', 'retryDelay', 'retryMaxDelay']) {
     if (!Number.isFinite(normalized[key]) || normalized[key] < 0) {
       throw new TypeError(`{opts.${key}} expecting a non-negative finite Number`);
     }
+    const maximum = key === 'timeout' ? MAX_TIMER_DELAY - 1000 : MAX_TIMER_DELAY;
+    if (normalized[key] > maximum) {
+      throw new TypeError(`{opts.${key}} must not exceed ${maximum} milliseconds`);
+    }
   }
   for (const key of ['maxRedirects', 'retries']) {
-    if (!Number.isInteger(normalized[key]) || normalized[key] < 0) {
+    if (!Number.isSafeInteger(normalized[key]) || normalized[key] < 0) {
       throw new TypeError(`{opts.${key}} expecting a non-negative integer`);
     }
   }
   if (!Array.isArray(normalized.retryMethods) || normalized.retryMethods.some((method) => typeof method !== 'string')) {
     throw new TypeError('{opts.retryMethods} expecting an Array of method names');
-  }
-  if (!Number.isFinite(normalized.retryMaxDelay) || normalized.retryMaxDelay < 0) {
-    throw new TypeError('{opts.retryMaxDelay} expecting a non-negative finite Number');
   }
   for (const key of [
     'debug',
@@ -250,7 +252,6 @@ const sendRequest = (libcurl, url, cb) => {
   let finished = false;
   let pipeError = null;
   let timeoutTimer = null;
-  let isJsonUpload = false;
   let hasContentType = false;
   let hasContentLength = false;
   let hasAcceptEncoding = false;
@@ -276,7 +277,37 @@ const sendRequest = (libcurl, url, cb) => {
     }
   };
 
-  const cleanupStreamListeners = () => {
+  const cleanupStreamListeners = (abortCause) => {
+    if (abortCause) {
+      finished = true;
+      for (const writableStream of libcurl.pipeTo) {
+        if (typeof writableStream.destroy !== 'function') continue;
+        const listener = streamErrorListeners.get(writableStream);
+        const release = () => {
+          removeStreamListener(writableStream, 'error', listener);
+          removeStreamListener(writableStream, 'error', release);
+          removeStreamListener(writableStream, 'close', release);
+        };
+        if (listener) {
+          // Pending writes and destroy() may emit after abort has settled.
+          // Either error or close releases both handlers, including when
+          // emitClose is false or destruction was already initiated.
+          try {
+            writableStream.once('error', release);
+            writableStream.once('close', release);
+          } catch (error) {
+            libcurl._debug('Registering writable teardown listeners threw an exception', error);
+          }
+          streamErrorListeners.delete(writableStream);
+        }
+        try {
+          if (!writableStream.destroyed) writableStream.destroy(abortCause);
+        } catch (error) {
+          release();
+          libcurl._debug('writableStream.destroy(abortCause) threw an exception', error);
+        }
+      }
+    }
     for (const [writableStream, listener] of streamErrorListeners) {
       removeStreamListener(writableStream, 'error', listener);
     }
@@ -427,7 +458,7 @@ const sendRequest = (libcurl, url, cb) => {
     if (!hasAcceptEncoding) {
       curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, '');
     } else {
-      curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, hasAcceptEncoding);
+      curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, String(hasAcceptEncoding));
     }
   }
 
@@ -629,9 +660,11 @@ const sendRequest = (libcurl, url, cb) => {
   });
 
   if (opts.form !== undefined) {
-    if (typeof opts.form === 'object') {
-      isJsonUpload = true;
-    }
+    // Serialization replaces opts.form with a string. Keep its original media
+    // type so every retry replays the same bytes with the same interpretation.
+    libcurl._formContentType ||= typeof opts.form === 'object'
+      ? 'application/json'
+      : 'application/x-www-form-urlencoded';
 
     if (typeof opts.form !== 'string') {
       try {
@@ -654,11 +687,7 @@ const sendRequest = (libcurl, url, cb) => {
     }
 
     if (!hasContentType) {
-      if (isJsonUpload) {
-        customHeaders.push('Content-Type: application/json');
-      } else {
-        customHeaders.push('Content-Type: application/x-www-form-urlencoded');
-      }
+      customHeaders.push(`Content-Type: ${libcurl._formContentType}`);
     }
 
     if (!hasContentLength && typeof opts.form === 'string') {
@@ -669,6 +698,11 @@ const sendRequest = (libcurl, url, cb) => {
   } else if (opts.upload !== undefined) {
     curl.setOpt(nodeLibcurl.Curl.option.UPLOAD, true);
     curl.setOpt(nodeLibcurl.Curl.option.READDATA, opts.upload);
+  }
+
+  if (opts.method === 'HEAD') {
+    // CUSTOMREQUEST changes only the method token, not response-body handling.
+    curl.setOpt(nodeLibcurl.Curl.option.NOBODY, true);
   }
 
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
@@ -712,7 +746,11 @@ const sendRequest = (libcurl, url, cb) => {
 
   process.nextTick(() => {
     if (!libcurl.finished && !finished) {
-      curl.perform();
+      try {
+        curl.perform();
+      } catch (error) {
+        libcurl._failConfiguration(error);
+      }
     }
   });
 
@@ -736,6 +774,7 @@ class LibCurlRequest {
 
     this.cb = typeof cb === 'function' ? cb : noop;
     this.sent = false;
+    this._started = false;
     this.pipeTo = [];
     this.finished = false;
     this.retryTimer = false;
@@ -800,8 +839,15 @@ class LibCurlRequest {
     }
   }
 
+  _assertCanRegister() {
+    if (this._started || this.finished) {
+      throw new Error('Register streaming handlers before the transfer starts; use wait: true for delayed setup');
+    }
+  }
+
   pipe(writableStream) {
-    if (writableStream.write && writableStream.end) {
+    this._assertCanRegister();
+    if (isWritableLike(writableStream)) {
       this.pipeTo.push(writableStream);
     } else {
       throw new TypeError('[request-libcurl] [.pipe()] method accepts only {stream.Writable}');
@@ -810,6 +856,7 @@ class LibCurlRequest {
   }
 
   onData(callback) {
+    this._assertCanRegister();
     if (typeof callback === 'function') {
       this._onData = callback;
     } else {
@@ -819,6 +866,7 @@ class LibCurlRequest {
   }
 
   onHeader(callback) {
+    this._assertCanRegister();
     if (typeof callback === 'function') {
       this._onHeader = callback;
     } else {
@@ -847,23 +895,25 @@ class LibCurlRequest {
     return this.opts.retryJitter ? Math.floor(Math.random() * (ceiling + 1)) : ceiling;
   }
 
-  _retry(result) {
-    this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
-    if (
-      !this.pipeTo.length
+  _canRetry() {
+    return !this.pipeTo.length
       && !this._onData
       && !this._onHeader
       && this.opts.upload === undefined
       && this.opts.retry === true
       && this.opts.retries > 0
-      && this.opts.retryMethods.includes(this.opts.method)
-    ) {
+      && this.opts.retryMethods.includes(this.opts.method);
+  }
+
+  _retry(result) {
+    this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
+    if (this._canRetry()) {
       const delay = this._getRetryDelay(result);
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
         this.retryTimer = false;
         if (!this.finished) {
-          this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+          this._sendAttempt();
         }
       }, delay);
       return true;
@@ -913,6 +963,25 @@ class LibCurlRequest {
     }
   }
 
+  _failConfiguration(cause) {
+    const error = createConfigurationError(cause);
+    this._stopAttemptTimeout();
+    this._stopRequestTimeout();
+    this._cleanupPipeListeners(error);
+    this.curl?.removeAllListeners?.();
+    closeCurl(this.curl);
+    process.nextTick(() => this._sendRequestCallback(error));
+  }
+
+  _sendAttempt() {
+    this._started = true;
+    try {
+      this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+    } catch (error) {
+      this._failConfiguration(error);
+    }
+  }
+
   send() {
     this._debug('[send]', this.opts.url);
     if (this.sent || this.finished) {
@@ -929,12 +998,24 @@ class LibCurlRequest {
       return this;
     }
 
-    const attemptBudget = (this.opts.timeout + 1000) * (this.initialRetries + 1);
-    const delayBudget = this.opts.retryMaxDelay * this.initialRetries;
-    this.timeoutTimer = setTimeout(() => {
-      this.abort();
-    }, attemptBudget + delayBudget);
-    this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+    const retries = this._canRetry() ? this.initialRetries : 0;
+    const attemptBudget = (this.opts.timeout + 1000) * (retries + 1);
+    const delayBudget = this.opts.retryMaxDelay * retries;
+    let remainingBudget = attemptBudget + delayBudget;
+    const scheduleTimeout = () => {
+      const delay = Math.min(remainingBudget, MAX_TIMER_DELAY);
+      remainingBudget -= delay;
+      this.timeoutTimer = setTimeout(() => {
+        if (remainingBudget > 0) scheduleTimeout();
+        else this.abort();
+      }, delay);
+    };
+    scheduleTimeout();
+    // Allow synchronous request(...).pipe(...).onData(...).onHeader(...) setup
+    // before deciding which native listeners the attempt needs.
+    process.nextTick(() => {
+      if (!this.finished) this._sendAttempt();
+    });
     return this;
   }
 
@@ -950,7 +1031,7 @@ class LibCurlRequest {
     this._debug('[abort]', this.opts.url);
     this._stopAttemptTimeout();
     this._stopRequestTimeout();
-    this._cleanupPipeListeners();
+    this._cleanupPipeListeners(this.finished ? undefined : Object.assign(new Error(abortError.message), abortError));
     this.curl?.removeAllListeners?.();
 
     if (this.retryTimer) {
@@ -985,12 +1066,13 @@ function request (opts, cb) {
 }
 
 async function requestAsync (opts) {
-  if (opts.wait) {
-    return new LibCurlRequest(Object.assign({}, opts, { isPromise: true }));
-  }
-
-  const req = new LibCurlRequest(Object.assign({}, opts, { isPromise: true }));
-  return req.promise;
+  // The return shape depends on the caller's wait option, not mutable defaults.
+  const req = new LibCurlRequest({
+    ...opts,
+    wait: opts.wait === undefined ? false : opts.wait,
+    isPromise: true
+  });
+  return req.opts.wait ? req : req.promise;
 }
 
 request.defaultOptions = {
