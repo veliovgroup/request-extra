@@ -444,7 +444,7 @@ const sendRequest = (libcurl, url, cb) => {
     if (!hasAcceptEncoding) {
       curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, '');
     } else {
-      curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, hasAcceptEncoding);
+      curl.setOpt(nodeLibcurl.Curl.option.ACCEPT_ENCODING, String(hasAcceptEncoding));
     }
   }
 
@@ -729,7 +729,11 @@ const sendRequest = (libcurl, url, cb) => {
 
   process.nextTick(() => {
     if (!libcurl.finished && !finished) {
-      curl.perform();
+      try {
+        curl.perform();
+      } catch (error) {
+        libcurl._failConfiguration(error);
+      }
     }
   });
 
@@ -880,7 +884,7 @@ class LibCurlRequest {
       this.retryTimer = setTimeout(() => {
         this.retryTimer = false;
         if (!this.finished) {
-          this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+          this._sendAttempt();
         }
       }, delay);
       return true;
@@ -930,6 +934,24 @@ class LibCurlRequest {
     }
   }
 
+  _failConfiguration(cause) {
+    const error = createConfigurationError(cause);
+    this._stopAttemptTimeout();
+    this._stopRequestTimeout();
+    this._cleanupPipeListeners(error);
+    this.curl?.removeAllListeners?.();
+    closeCurl(this.curl);
+    process.nextTick(() => this._sendRequestCallback(error));
+  }
+
+  _sendAttempt() {
+    try {
+      this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+    } catch (error) {
+      this._failConfiguration(error);
+    }
+  }
+
   send() {
     this._debug('[send]', this.opts.url);
     if (this.sent || this.finished) {
@@ -951,7 +973,7 @@ class LibCurlRequest {
     this.timeoutTimer = setTimeout(() => {
       this.abort();
     }, attemptBudget + delayBudget);
-    this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
+    this._sendAttempt();
     return this;
   }
 

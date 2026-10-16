@@ -1552,6 +1552,30 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local setup error cleanup', () => {
+  for (const value of [true, 1]) {
+    it(`serializes Accept-Encoding header value ${value}`, async () => {
+      const server = await createLocalServer((req, res) => res.end(req.headers['accept-encoding']));
+      try {
+        const response = await requestAsync({ url: server.url, headers: { 'Accept-Encoding': value }, retry: false });
+        strictAssert.equal(response.body, String(value));
+      } finally {
+        await server.close();
+      }
+    });
+  }
+  for (const mode of ['callback', 'promise']) {
+    it(`settles native setup exceptions through ${mode} API without leaking timers`, async () => {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { stdout } = await promisify(execFile)(process.execPath, [
+        'test/fixtures/setup-error.js', mode
+      ], { timeout: 750 });
+      strictAssert.match(stdout, /setup-error-ok/);
+    });
+  }
+});
+
 describe('local abort stream cleanup', () => {
   for (const mode of ['write', 'final', 'destroying']) {
     it(`consumes pending writable errors after abort during ${mode}`, async () => {
