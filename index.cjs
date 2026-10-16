@@ -685,6 +685,11 @@ const sendRequest = (libcurl, url, cb) => {
     curl.setOpt(nodeLibcurl.Curl.option.READDATA, opts.upload);
   }
 
+  if (opts.method === 'HEAD') {
+    // CUSTOMREQUEST changes only the method token, not response-body handling.
+    curl.setOpt(nodeLibcurl.Curl.option.NOBODY, true);
+  }
+
   if (opts.curlOptions && typeof opts.curlOptions === 'object') {
     for (const [option, value] of Object.entries(opts.curlOptions)) {
       try {

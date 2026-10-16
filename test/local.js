@@ -1552,6 +1552,28 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local HEAD semantics', () => {
+  for (const rawBody of [false, true]) {
+    it(`completes HEAD with a nonzero content length (rawBody: ${rawBody})`, async () => {
+      const methods = [];
+      const server = await createLocalServer((req, res) => {
+        methods.push(req.method);
+        res.setHeader('Content-Length', '5');
+        res.end('hello');
+      });
+      try {
+        const response = await requestAsync({ url: server.url, method: 'HEAD', rawBody, retry: false, timeout: 100 });
+        strictAssert.equal(response.statusCode, 200);
+        strictAssert.equal(response.headers['content-length'], '5');
+        strictAssert.equal(response.body.length, 0);
+        strictAssert.deepEqual(methods, ['HEAD']);
+      } finally {
+        await server.close();
+      }
+    });
+  }
+});
+
 describe('local retry payload stability', () => {
   for (const contentType of [undefined, 'application/vnd.example+json']) {
     it(`preserves JSON bytes and content type across retries (${contentType ?? 'automatic'})`, async () => {
