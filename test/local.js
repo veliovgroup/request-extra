@@ -1552,6 +1552,19 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local abort stream cleanup', () => {
+  for (const mode of ['write', 'final', 'destroying']) {
+    it(`consumes pending writable errors after abort during ${mode}`, async () => {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { stdout } = await promisify(execFile)(process.execPath, [
+        'test/fixtures/abort-stream-error.js', mode
+      ], { timeout: 5000 });
+      strictAssert.match(stdout, /abort-stream-ok/);
+    });
+  }
+});
+
 describe('local stream failure guard', () => {
   it('ignores remaining native chunks after synchronous writable failure', async () => {
     let writes = 0;

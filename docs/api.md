@@ -72,7 +72,7 @@ See [Retries and errors](./retries-and-errors.md).
 - `.onHeader(callback)` registers per-header callback and returns request.
 - `.send()` starts request once and returns request.
 - `.sendAsync()` starts Promise-mode request once and returns its Promise, which resolves with `Response` or rejects with `ResponseError`.
-- `.abort()` aborts unfinished request and returns request.
+- `.abort()` aborts unfinished request, destroys active writable destinations that provide `destroy()`, and returns request. Writable error handlers remain attached until teardown completes.
 - `.abortAsync()` aborts unfinished Promise-mode request. It rejects with abort error when request is still active; after completion, it returns existing settled Promise.
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.

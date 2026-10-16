@@ -276,7 +276,24 @@ const sendRequest = (libcurl, url, cb) => {
     }
   };
 
-  const cleanupStreamListeners = () => {
+  const cleanupStreamListeners = (abortCause) => {
+    if (abortCause) {
+      finished = true;
+      for (const [writableStream, listener] of streamErrorListeners) {
+        if (typeof writableStream.destroy === 'function') {
+          // Pending writes and destroy() may emit after abort has settled.
+          // Keep the error handler until teardown completes, even if destroy
+          // was already called by the writable itself.
+          try {
+            writableStream.once('close', () => removeStreamListener(writableStream, 'error', listener));
+            if (!writableStream.destroyed) writableStream.destroy(abortCause);
+            streamErrorListeners.delete(writableStream);
+          } catch (error) {
+            libcurl._debug('writableStream.destroy(abortCause) threw an exception', error);
+          }
+        }
+      }
+    }
     for (const [writableStream, listener] of streamErrorListeners) {
       removeStreamListener(writableStream, 'error', listener);
     }
@@ -950,7 +967,7 @@ class LibCurlRequest {
     this._debug('[abort]', this.opts.url);
     this._stopAttemptTimeout();
     this._stopRequestTimeout();
-    this._cleanupPipeListeners();
+    this._cleanupPipeListeners(this.finished ? undefined : Object.assign(new Error(abortError.message), abortError));
     this.curl?.removeAllListeners?.();
 
     if (this.retryTimer) {
