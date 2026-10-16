@@ -1552,6 +1552,85 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local streaming registration', () => {
+  it('delivers body and headers to immediately chained handlers and writables', async () => {
+    const { Writable } = await import('node:stream');
+    const body = [];
+    const data = [];
+    const headers = [];
+    const sink = new Writable({ write(chunk, _encoding, callback) { body.push(chunk); callback(); } });
+    const server = await createLocalServer((_req, res) => res.end('hello'));
+    try {
+      await new Promise((resolve, reject) => {
+        request({ url: server.url, noStorage: true, retry: false }, (error) => error ? reject(error) : resolve())
+          .pipe(sink)
+          .onData((chunk) => data.push(chunk))
+          .onHeader((chunk) => headers.push(chunk));
+      });
+      strictAssert.equal(Buffer.concat(body).toString(), 'hello');
+      strictAssert.equal(Buffer.concat(data).toString(), 'hello');
+      strictAssert.match(Buffer.concat(headers).toString(), /HTTP\/1\.1 200/);
+      strictAssert.equal(sink.writableFinished, true);
+    } finally {
+      sink.destroy();
+      await server.close();
+    }
+  });
+
+  it('handles errors from an immediately chained writable', async () => {
+    const { Writable } = await import('node:stream');
+    const cause = new Error('disk failure');
+    const sink = new Writable({ write(chunk, _encoding, callback) { callback(chunk.length ? cause : undefined); } });
+    const server = await createLocalServer((_req, res) => res.end('body'));
+    try {
+      const error = await new Promise((resolve) => {
+        request({ url: server.url, retry: false }, resolve).pipe(sink);
+      });
+      strictAssert.equal(error?.errorCode, 23);
+      strictAssert.equal(error.cause, cause);
+    } finally {
+      sink.destroy();
+      await server.close();
+    }
+  });
+
+  it('rejects streaming registration once a transfer has started', async () => {
+    const server = await createLocalServer((_req, res) => res.write('body'));
+    const req = await requestAsync({ url: server.url, wait: true, retry: false });
+    const sent = req.sendAsync();
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      for (const register of [
+        () => req.pipe({ write() {}, end() {} }),
+        () => req.onData(() => {}),
+        () => req.onHeader(() => {})
+      ]) {
+        strictAssert.throws(register, /before.*transfer|wait: true/);
+      }
+    } finally {
+      const aborted = req.abortAsync();
+      await strictAssert.rejects(sent, { statusCode: 499 });
+      await strictAssert.rejects(aborted, { statusCode: 499 });
+      await server.close();
+    }
+  });
+
+  it('does not transfer when an immediately chained request is aborted', async () => {
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => { attempts++; res.end(); });
+    try {
+      const error = await new Promise((resolve) => {
+        request({ url: server.url, retry: false }, resolve).onData(() => {}).abort();
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      strictAssert.equal(error.statusCode, 499);
+      strictAssert.equal(attempts, 0);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
 describe('local HEAD semantics', () => {
   for (const rawBody of [false, true]) {
     it(`completes HEAD with a nonzero content length (rawBody: ${rawBody})`, async () => {

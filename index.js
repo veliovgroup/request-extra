@@ -754,6 +754,7 @@ class LibCurlRequest {
 
     this.cb = typeof cb === 'function' ? cb : noop;
     this.sent = false;
+    this._started = false;
     this.pipeTo = [];
     this.finished = false;
     this.retryTimer = false;
@@ -818,8 +819,15 @@ class LibCurlRequest {
     }
   }
 
+  _assertCanRegister() {
+    if (this._started || this.finished) {
+      throw new Error('Register streaming handlers before the transfer starts; use wait: true for delayed setup');
+    }
+  }
+
   pipe(writableStream) {
-    if (writableStream.write && writableStream.end) {
+    this._assertCanRegister();
+    if (isWritableLike(writableStream)) {
       this.pipeTo.push(writableStream);
     } else {
       throw new TypeError('[request-libcurl] [.pipe()] method accepts only {stream.Writable}');
@@ -828,6 +836,7 @@ class LibCurlRequest {
   }
 
   onData(callback) {
+    this._assertCanRegister();
     if (typeof callback === 'function') {
       this._onData = callback;
     } else {
@@ -837,6 +846,7 @@ class LibCurlRequest {
   }
 
   onHeader(callback) {
+    this._assertCanRegister();
     if (typeof callback === 'function') {
       this._onHeader = callback;
     } else {
@@ -942,6 +952,7 @@ class LibCurlRequest {
   }
 
   _sendAttempt() {
+    this._started = true;
     try {
       this.curl = sendRequest(this, this.url, this._sendRequestCallback.bind(this));
     } catch (error) {
@@ -970,7 +981,11 @@ class LibCurlRequest {
     this.timeoutTimer = setTimeout(() => {
       this.abort();
     }, attemptBudget + delayBudget);
-    this._sendAttempt();
+    // Allow synchronous request(...).pipe(...).onData(...).onHeader(...) setup
+    // before deciding which native listeners the attempt needs.
+    process.nextTick(() => {
+      if (!this.finished) this._sendAttempt();
+    });
     return this;
   }
 

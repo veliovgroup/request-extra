@@ -12,7 +12,7 @@ Types: `HeaderValue`, `BinaryData`, `WritableLike`, `RequestOptions`, `RequestIn
 
 ## `request(options, callback?)`
 
-Creates and returns a `LibCurlRequest`. Unless `wait: true`, it starts immediately. With callback form, success calls `callback(undefined, response)` and failure calls `callback(error)`.
+Creates and returns a `LibCurlRequest`. Unless `wait: true`, it schedules the transfer for the next tick. Synchronous chaining such as `request(options, callback).pipe(destination)` is supported. With callback form, success calls `callback(undefined, response)` and failure calls `callback(error)`.
 
 ## `requestAsync(options)`
 
@@ -76,6 +76,8 @@ See [Retries and errors](./retries-and-errors.md).
 - `.abortAsync()` aborts unfinished Promise-mode request. It rejects with abort error when request is still active; after completion, it returns existing settled Promise.
 
 `sendAsync()` and `abortAsync()` only work on requests created by `requestAsync()`.
+
+Register `.pipe()`, `.onData()`, and `.onHeader()` synchronously after construction or before sending a `wait: true` request. Registration after transfer setup starts throws instead of silently missing data. Use `wait: true` when setup crosses an asynchronous boundary.
 
 Registering `onData()` or `onHeader()` disables retries. Callback output from an earlier attempt cannot be rolled back. On transport failure, or when one writable fails, library calls `destroy(error)` on every remaining writable that provides it. A writable with a string `path` may have that partial file removed.
 
