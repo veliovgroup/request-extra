@@ -245,7 +245,6 @@ const sendRequest = (libcurl, url, cb) => {
   let finished = false;
   let pipeError = null;
   let timeoutTimer = null;
-  let isJsonUpload = false;
   let hasContentType = false;
   let hasContentLength = false;
   let hasAcceptEncoding = false;
@@ -641,9 +640,11 @@ const sendRequest = (libcurl, url, cb) => {
   });
 
   if (opts.form !== undefined) {
-    if (typeof opts.form === 'object') {
-      isJsonUpload = true;
-    }
+    // Serialization replaces opts.form with a string. Keep its original media
+    // type so every retry replays the same bytes with the same interpretation.
+    libcurl._formContentType ||= typeof opts.form === 'object'
+      ? 'application/json'
+      : 'application/x-www-form-urlencoded';
 
     if (typeof opts.form !== 'string') {
       try {
@@ -666,11 +667,7 @@ const sendRequest = (libcurl, url, cb) => {
     }
 
     if (!hasContentType) {
-      if (isJsonUpload) {
-        customHeaders.push('Content-Type: application/json');
-      } else {
-        customHeaders.push('Content-Type: application/x-www-form-urlencoded');
-      }
+      customHeaders.push(`Content-Type: ${libcurl._formContentType}`);
     }
 
     if (!hasContentLength && typeof opts.form === 'string') {

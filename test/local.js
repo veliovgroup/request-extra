@@ -1552,6 +1552,42 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local retry payload stability', () => {
+  for (const contentType of [undefined, 'application/vnd.example+json']) {
+    it(`preserves JSON bytes and content type across retries (${contentType ?? 'automatic'})`, async () => {
+      const received = [];
+      let serializations = 0;
+      const server = await createLocalServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+          received.push({ body, contentType: req.headers['content-type'] });
+          res.statusCode = received.length === 1 ? 503 : 200;
+          res.end('ok');
+        });
+      });
+      try {
+        const response = await requestAsync({
+          url: server.url,
+          method: 'PUT',
+          form: { toJSON() { serializations++; return { attempt: serializations }; } },
+          headers: contentType ? { 'Content-Type': contentType } : {},
+          retries: 1,
+          retryDelay: 0
+        });
+        strictAssert.equal(response.statusCode, 200);
+        strictAssert.equal(serializations, 1);
+        strictAssert.deepEqual(received, [
+          { body: '{"attempt":1}', contentType: contentType ?? 'application/json' },
+          { body: '{"attempt":1}', contentType: contentType ?? 'application/json' }
+        ]);
+      } finally {
+        await server.close();
+      }
+    });
+  }
+});
+
 describe('local setup error cleanup', () => {
   for (const value of [true, 1]) {
     it(`serializes Accept-Encoding header value ${value}`, async () => {
