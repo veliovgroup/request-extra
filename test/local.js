@@ -1552,6 +1552,94 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local timer bounds', () => {
+  for (const retry of [false, true]) {
+    it(`does not turn a large timeout into an immediate abort (retry: ${retry})`, async () => {
+      const server = await createLocalServer((_req, res) => setTimeout(() => res.end('ok'), 30));
+      try {
+        const response = await requestAsync({ url: server.url, timeout: 600_000_000, retry });
+        strictAssert.equal(response.body, 'ok');
+      } finally {
+        await server.close();
+      }
+    });
+  }
+
+  for (const [key, value] of [
+    ['timeout', 2_147_482_648],
+    ['retryDelay', 2_147_483_648],
+    ['retryMaxDelay', 2_147_483_648],
+    ['retries', Number.MAX_SAFE_INTEGER + 1],
+    ['maxRedirects', Number.MAX_SAFE_INTEGER + 1]
+  ]) {
+    it(`rejects ${key} above its supported range before sending`, () => {
+      strictAssert.throws(() => request({ url: 'http://127.0.0.1:1', wait: true, [key]: value }), TypeError);
+    });
+  }
+
+  it('keeps an oversized overall deadline across timer chunks and clears it on abort', async () => {
+    // Waiting 24 days is impractical. Mock only JS timers; native setup stays
+    // queued until after these synchronous assertions and cancellation.
+    const { mock } = await import('node:test');
+    mock.timers.enable({ apis: ['setTimeout'] });
+    let error;
+    let calls = 0;
+    const req = request({ url: 'http://127.0.0.1:1', wait: true, timeout: 600_000_000, retryMaxDelay: 0 }, (caught) => {
+      error = caught;
+      calls++;
+    });
+    try {
+      req.send();
+      mock.timers.tick(2_147_483_647);
+      strictAssert.equal(calls, 0);
+      req.abort();
+      mock.timers.tick(300_000_353);
+      strictAssert.equal(calls, 1);
+      strictAssert.equal(error.statusCode, 499);
+      strictAssert.equal(req.timeoutTimer, null);
+    } finally {
+      req.abort();
+      mock.timers.reset();
+    }
+  });
+
+  it('expires the overall deadline at the end of the final timer chunk', async () => {
+    const { mock } = await import('node:test');
+    mock.timers.enable({ apis: ['setTimeout'] });
+    let error;
+    const req = request({ url: 'http://127.0.0.1:1', wait: true, timeout: 600_000_000, retryMaxDelay: 0 }, (caught) => { error = caught; });
+    try {
+      req.send();
+      mock.timers.tick(2_147_483_647);
+      strictAssert.equal(error, undefined);
+      mock.timers.tick(252_520_352);
+      strictAssert.equal(error, undefined);
+      mock.timers.tick(1);
+      strictAssert.equal(error.statusCode, 499);
+    } finally {
+      req.abort();
+      mock.timers.reset();
+    }
+  });
+
+  for (const options of [{ retry: false }, { method: 'POST' }]) {
+    it(`uses one attempt in the fallback budget for ${JSON.stringify(options)}`, async () => {
+      const { mock } = await import('node:test');
+      mock.timers.enable({ apis: ['setTimeout'] });
+      let error;
+      const req = request({ url: 'http://127.0.0.1:1', wait: true, timeout: 10, ...options }, (caught) => { error = caught; });
+      try {
+        req.send();
+        mock.timers.tick(1010);
+        strictAssert.equal(error?.statusCode, 499);
+      } finally {
+        req.abort();
+        mock.timers.reset();
+      }
+    });
+  }
+});
+
 describe('local async wait defaults', () => {
   for (const extra of [{}, { wait: undefined }, { wait: false }]) {
     it(`sends Promise requests despite a global wait default (${Object.hasOwn(extra, 'wait') ? String(extra.wait) : 'omitted'})`, async () => {

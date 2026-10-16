@@ -3,6 +3,7 @@ import { URL } from 'node:url';
 import { Curl, CurlFeature, CurlPause } from 'node-libcurl';
 const SSL_ERROR_CODES = [35, 58, 60, 83, 90, 91];
 const NON_RETRYABLE_ERROR_CODES = [3, 4, 23, 42, 43, 47];
+const MAX_TIMER_DELAY = 2_147_483_647;
 
 const badUrlError = {
   code: 3,
@@ -169,21 +170,22 @@ const normalizeOptions = (opts) => {
   if (typeof normalized.method !== 'string' || !HTTP_TOKEN.test(normalized.method)) {
     throw new TypeError('{opts.method} expecting a valid HTTP token');
   }
-  for (const key of ['timeout', 'retryDelay']) {
+  for (const key of ['timeout', 'retryDelay', 'retryMaxDelay']) {
     if (!Number.isFinite(normalized[key]) || normalized[key] < 0) {
       throw new TypeError(`{opts.${key}} expecting a non-negative finite Number`);
     }
+    const maximum = key === 'timeout' ? MAX_TIMER_DELAY - 1000 : MAX_TIMER_DELAY;
+    if (normalized[key] > maximum) {
+      throw new TypeError(`{opts.${key}} must not exceed ${maximum} milliseconds`);
+    }
   }
   for (const key of ['maxRedirects', 'retries']) {
-    if (!Number.isInteger(normalized[key]) || normalized[key] < 0) {
+    if (!Number.isSafeInteger(normalized[key]) || normalized[key] < 0) {
       throw new TypeError(`{opts.${key}} expecting a non-negative integer`);
     }
   }
   if (!Array.isArray(normalized.retryMethods) || normalized.retryMethods.some((method) => typeof method !== 'string')) {
     throw new TypeError('{opts.retryMethods} expecting an Array of method names');
-  }
-  if (!Number.isFinite(normalized.retryMaxDelay) || normalized.retryMaxDelay < 0) {
-    throw new TypeError('{opts.retryMaxDelay} expecting a non-negative finite Number');
   }
   for (const key of [
     'debug',
@@ -875,17 +877,19 @@ class LibCurlRequest {
     return this.opts.retryJitter ? Math.floor(Math.random() * (ceiling + 1)) : ceiling;
   }
 
-  _retry(result) {
-    this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
-    if (
-      !this.pipeTo.length
+  _canRetry() {
+    return !this.pipeTo.length
       && !this._onData
       && !this._onHeader
       && this.opts.upload === undefined
       && this.opts.retry === true
       && this.opts.retries > 0
-      && this.opts.retryMethods.includes(this.opts.method)
-    ) {
+      && this.opts.retryMethods.includes(this.opts.method);
+  }
+
+  _retry(result) {
+    this._debug('[_retry]', this.opts.retry, this.opts.retries, this.opts.url);
+    if (this._canRetry()) {
       const delay = this._getRetryDelay(result);
       --this.opts.retries;
       this.retryTimer = setTimeout(() => {
@@ -976,11 +980,19 @@ class LibCurlRequest {
       return this;
     }
 
-    const attemptBudget = (this.opts.timeout + 1000) * (this.initialRetries + 1);
-    const delayBudget = this.opts.retryMaxDelay * this.initialRetries;
-    this.timeoutTimer = setTimeout(() => {
-      this.abort();
-    }, attemptBudget + delayBudget);
+    const retries = this._canRetry() ? this.initialRetries : 0;
+    const attemptBudget = (this.opts.timeout + 1000) * (retries + 1);
+    const delayBudget = this.opts.retryMaxDelay * retries;
+    let remainingBudget = attemptBudget + delayBudget;
+    const scheduleTimeout = () => {
+      const delay = Math.min(remainingBudget, MAX_TIMER_DELAY);
+      remainingBudget -= delay;
+      this.timeoutTimer = setTimeout(() => {
+        if (remainingBudget > 0) scheduleTimeout();
+        else this.abort();
+      }, delay);
+    };
+    scheduleTimeout();
     // Allow synchronous request(...).pipe(...).onData(...).onHeader(...) setup
     // before deciding which native listeners the attempt needs.
     process.nextTick(() => {

@@ -40,6 +40,14 @@ Without `Retry-After`, delay ceiling doubles for each retry: `retryDelay * 2^att
 
 When response has `Retry-After`, library accepts non-negative seconds or future HTTP date and caps resulting delay at `retryMaxDelay`. Invalid, negative, or past values fall back to exponential delay. Set `respectRetryAfter: false` to ignore header.
 
+## Timeout limits
+
+`timeout` accepts finite values from `0` through `2147482647` milliseconds. The wrapper keeps a fallback abort timer for `timeout + 1000` ms, even if `curlOptions` overrides the native timeout. Consequently, `timeout: 0` is not an unlimited request: its fallback aborts after 1000 ms.
+
+`retryDelay` and `retryMaxDelay` accept finite values from `0` through `2147483647` milliseconds. Larger values throw `TypeError` before sending instead of overflowing Node's timers. Retry and redirect counts must be non-negative safe integers.
+
+The overall fallback budget includes attempts and retry delays. Budgets longer than one Node timer are scheduled in bounded chunks, not truncated to a millisecond. Disabling retries or selecting a method outside `retryMethods` uses a single-attempt budget.
+
 ## Error shape
 
 Callback failures receive `ResponseError`; Promise requests reject with same shape. `errorCode` is libcurl error code and `code` aliases it. `statusCode` is mapped HTTP-style status and `status` aliases it.

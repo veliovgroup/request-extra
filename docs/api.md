@@ -32,10 +32,10 @@ Returns a `Promise<Response>` by default. Only an explicit `wait: true` returns 
 | `pipeTo` | `WritableLike` | Writable destination for response data. Requests with a writable destination do not retry because response bytes cannot be rolled back after they are written. |
 | `headers` | `Record<string, HeaderValue>` | Merges with default headers; names match case-insensitively, so `content-type` replaces a default `Content-Type`. Set a default header to `false`, `null`, or `undefined` to remove it. Header names must be HTTP tokens; values cannot contain CR or LF. |
 | `debug` | `boolean` | Enables request debug output. |
-| `timeout` | `number` | Per-attempt timeout in milliseconds. |
+| `timeout` | `number` | Per-attempt timeout in milliseconds, from `0` through `2147482647`. A JavaScript fallback aborts after `timeout + 1000` ms; `0` disables the native timeout but retains this 1000 ms fallback. |
 | `keepAlive` | `boolean` | Enables TCP keepalive probes. |
 | `followRedirect` | `boolean` | Follows redirects. |
-| `maxRedirects` | `number` | Non-negative integer redirect limit. |
+| `maxRedirects` | `number` | Non-negative safe integer redirect limit. |
 | `badStatuses` | `number[]` | Statuses passed to `isBadStatus`. |
 | `isBadStatus` | `(statusCode, badStatuses?) => boolean` | Decides whether a response status can retry. |
 | `rawBody` | `boolean` | Returns `body` as a `Buffer` instead of a string. `headers` stays parsed; `onHeader()` still receives raw header lines. |
@@ -54,10 +54,10 @@ Returns a `Promise<Response>` by default. Only an explicit `wait: true` returns 
 | Option | Type | Meaning |
 | --- | --- | --- |
 | `retry` | `boolean` | Enables retries. |
-| `retries` | `number` | Non-negative integer number of additional attempts. |
-| `retryDelay` | `number` | Initial retry-delay ceiling in milliseconds. |
+| `retries` | `number` | Non-negative safe integer number of additional attempts. |
+| `retryDelay` | `number` | Initial retry-delay ceiling in milliseconds, from `0` through `2147483647`. |
 | `retryMethods` | `readonly string[]` | Methods eligible for retries. |
-| `retryMaxDelay` | `number` | Maximum retry delay in milliseconds. |
+| `retryMaxDelay` | `number` | Maximum retry delay in milliseconds, from `0` through `2147483647`. |
 | `retryJitter` | `boolean` | Randomizes each retry delay. |
 | `respectRetryAfter` | `boolean` | Uses valid `Retry-After` headers. |
 
