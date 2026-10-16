@@ -1552,6 +1552,55 @@ describe('local writable validation', () => {
   });
 });
 
+describe('local async wait defaults', () => {
+  for (const extra of [{}, { wait: undefined }, { wait: false }]) {
+    it(`sends Promise requests despite a global wait default (${Object.hasOwn(extra, 'wait') ? String(extra.wait) : 'omitted'})`, async () => {
+      const previous = request.defaultOptions.wait;
+      const server = await createLocalServer((_req, res) => res.end('sent'));
+      let timer;
+      try {
+        request.defaultOptions.wait = true;
+        const response = await Promise.race([
+          requestAsync({ url: server.url, retry: false, ...extra }),
+          new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error('request remained unsent')), 250); })
+        ]);
+        strictAssert.equal(response.body, 'sent');
+      } finally {
+        clearTimeout(timer);
+        request.defaultOptions.wait = previous;
+        await server.close();
+      }
+    });
+  }
+
+  it('keeps explicit Promise wait and callback wait defaults deferred', async () => {
+    const previous = request.defaultOptions.wait;
+    let attempts = 0;
+    const server = await createLocalServer((_req, res) => { attempts++; res.end('sent'); });
+    try {
+      request.defaultOptions.wait = true;
+      const asyncReq = await requestAsync({ url: server.url, wait: true, retry: false });
+      const callbackResult = new Promise((resolve, reject) => {
+        const req = request({ url: server.url, retry: false }, (error, response) => error ? reject(error) : resolve(response));
+        strictAssert.equal(req.sent, false);
+        req.send();
+      });
+      strictAssert.equal(asyncReq.sent, false);
+      strictAssert.equal(attempts, 0);
+      strictAssert.equal((await asyncReq.sendAsync()).body, 'sent');
+      strictAssert.equal((await callbackResult).body, 'sent');
+      strictAssert.equal(attempts, 2);
+    } finally {
+      request.defaultOptions.wait = previous;
+      await server.close();
+    }
+  });
+
+  it('does not bypass validation for an explicit null wait', async () => {
+    await strictAssert.rejects(requestAsync({ url: 'http://127.0.0.1:1', wait: null }), TypeError);
+  });
+});
+
 describe('local streaming registration', () => {
   it('delivers body and headers to immediately chained handlers and writables', async () => {
     const { Writable } = await import('node:stream');

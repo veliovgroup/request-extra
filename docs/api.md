@@ -16,7 +16,7 @@ Creates and returns a `LibCurlRequest`. Unless `wait: true`, it schedules the tr
 
 ## `requestAsync(options)`
 
-Returns a `Promise<Response>` by default. With `wait: true`, returns `Promise<LibCurlRequest>` without sending; register handlers, then call `sendAsync()`.
+Returns a `Promise<Response>` by default. Only an explicit `wait: true` returns `Promise<LibCurlRequest>` without sending; register handlers, then call `sendAsync()`. Unlike the callback API, `requestAsync()` ignores `request.defaultOptions.wait` so changing a global default cannot change its return shape or strand an unsent request.
 
 ## Request options
 

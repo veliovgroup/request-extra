@@ -20,6 +20,16 @@ const { default: request, requestAsync } = require('request-libcurl');
 
 TypeScript resolves separate ESM and CommonJS declaration files through package export conditions. No type-only compatibility package is required.
 
+## Deferred Promise requests
+
+`requestAsync()` defers only when its caller supplies `wait: true`. A global `request.defaultOptions.wait = true` still defers callback requests, but no longer leaves ordinary Promise requests waiting on an inaccessible controller. This keeps the runtime return shape aligned with the TypeScript overloads.
+
+```js
+const pending = await requestAsync({ url: 'https://example.com', wait: true });
+pending.onData((chunk) => console.log(chunk.length));
+const response = await pending.sendAsync();
+```
+
 ## Retries
 
 `retries` counts additional attempts. Default `3` permits four total attempts.

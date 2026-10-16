@@ -1036,12 +1036,13 @@ function request (opts, cb) {
 }
 
 async function requestAsync (opts) {
-  if (opts.wait) {
-    return new LibCurlRequest(Object.assign({}, opts, { isPromise: true }));
-  }
-
-  const req = new LibCurlRequest(Object.assign({}, opts, { isPromise: true }));
-  return req.promise;
+  // The return shape depends on the caller's wait option, not mutable defaults.
+  const req = new LibCurlRequest({
+    ...opts,
+    wait: opts.wait === undefined ? false : opts.wait,
+    isPromise: true
+  });
+  return req.opts.wait ? req : req.promise;
 }
 
 request.defaultOptions = {
