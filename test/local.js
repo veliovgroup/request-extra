@@ -1085,6 +1085,35 @@ describe('local coverage gaps', () => {
     }
   });
 
+  it('shares default options between ESM and CommonJS entry points', async () => {
+    const { createRequire } = await import('node:module');
+    const cjs = createRequire(import.meta.url)('../index.cjs').default;
+    const original = request.defaultOptions;
+    try {
+      strictAssert.equal(cjs.defaultOptions, request.defaultOptions);
+      request.defaultOptions.retries = 7;
+      strictAssert.equal(cjs.defaultOptions.retries, 7);
+      cjs.defaultOptions = { ...original, rejectUnauthorized: true };
+      strictAssert.equal(request.defaultOptions.rejectUnauthorized, true);
+    } finally {
+      original.retries = 3;
+      request.defaultOptions = original;
+    }
+  });
+
+  it('adds missing defaults to a shared object created by another 5.x copy', async () => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const script = `
+      const key = Symbol.for('request-libcurl@5.defaultOptions');
+      Object.defineProperty(globalThis, key, { value: { current: { retries: 1, headers: {} } } });
+      const { default: request } = await import(${JSON.stringify(new URL('../index.js', import.meta.url).href)});
+      console.log(JSON.stringify([request.defaultOptions.retries, request.defaultOptions.retryJitter, request.defaultOptions.timeout]));
+    `;
+    const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script]);
+    strictAssert.deepEqual(JSON.parse(stdout), [1, true, 6144]);
+  });
+
   it('rejects invalid retry arrays, delays and top-level options', () => {
     for (const opts of [null, [], 'url']) {
       strictAssert.throws(() => request(opts), TypeError);
@@ -1288,8 +1317,8 @@ describe('local cleanup gaps', () => {
     }
   });
 
-  for (const exists of [true, false]) {
-    it(`cleans interrupted download path when file exists ${exists}`, async () => {
+  for (const [exists, flags] of [[true, 'w'], [false, 'w'], [true, 'xw+']]) {
+    it(`cleans interrupted download path with flags ${flags} when file exists ${exists}`, async () => {
       const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import('node:fs');
       const { tmpdir } = await import('node:os');
       const { join } = await import('node:path');
@@ -1299,7 +1328,7 @@ describe('local cleanup gaps', () => {
       const logs = [];
       const originalInfo = console.info;
       console.info = (...args) => logs.push(args);
-      const sink = { path, write() { return true; }, end() {} };
+      const sink = { path, flags, write() { return true; }, end() {} };
       const server = await createLocalServer((incoming) => incoming.socket.destroy());
       try {
         await strictAssert.rejects(requestAsync({ url: server.url, pipeTo: sink }), { statusCode: 503 });
@@ -1307,6 +1336,26 @@ describe('local cleanup gaps', () => {
         if (!exists) strictAssert.ok(logs.some((args) => args.some((arg) => String(arg).includes('fs.unlinkSync'))));
       } finally {
         console.info = originalInfo;
+        rmSync(directory, { recursive: true, force: true });
+        await server.close();
+      }
+    });
+  }
+
+  for (const flags of ['a', 'r+', 1537, undefined]) {
+    it(`keeps an existing download path opened with flags ${String(flags)} on transport error`, async () => {
+      const { mkdtempSync, writeFileSync, readFileSync: read, rmSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const directory = mkdtempSync(join(tmpdir(), 'request-local-'));
+      const path = join(directory, 'log');
+      writeFileSync(path, 'existing data');
+      const sink = { path, flags, write() { return true; }, end() {} };
+      const server = await createLocalServer((incoming) => incoming.socket.destroy());
+      try {
+        await strictAssert.rejects(requestAsync({ url: server.url, pipeTo: sink }), { statusCode: 503 });
+        strictAssert.equal(read(path, 'utf8'), 'existing data');
+      } finally {
         rmSync(directory, { recursive: true, force: true });
         await server.close();
       }
@@ -1766,6 +1815,33 @@ describe('local streaming registration', () => {
       await server.close();
     }
   });
+
+  it('reports an invalid URL to the callback when handlers are chained', async () => {
+    const error = await new Promise((resolve) => {
+      request({ url: 'not a url' }, resolve)
+        .pipe({ write() {}, end() {} })
+        .onData(() => {})
+        .onHeader(() => {});
+    });
+    strictAssert.equal(error.statusCode, 400);
+  });
+
+  for (const mode of ['invalid URL', 'abort()']) {
+    it(`keeps a waiting Promise request settled by ${mode} handled until sendAsync()`, async () => {
+      const unhandled = [];
+      const onUnhandled = (reason) => unhandled.push(reason);
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        const req = await requestAsync({ url: mode === 'abort()' ? 'http://127.0.0.1:9/' : 'not a url', wait: true });
+        if (mode === 'abort()') req.abort();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        strictAssert.deepEqual(unhandled, []);
+        await strictAssert.rejects(req.sendAsync(), { statusCode: mode === 'abort()' ? 499 : 400 });
+      } finally {
+        process.removeListener('unhandledRejection', onUnhandled);
+      }
+    });
+  }
 });
 
 describe('local HEAD semantics', () => {
@@ -1884,6 +1960,28 @@ describe('local abort stream cleanup', () => {
       ], { timeout: 5000 });
       strictAssert.match(stdout, /abort-stream-ok/);
     });
+  }
+
+  it('starts a new request from inside a data callback', async () => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const { stdout } = await promisify(execFile)(process.execPath, [
+      'test/fixtures/callback-abort.js', 'start'
+    ], { timeout: 10000 });
+    strictAssert.match(stdout, /callback-abort-ok/);
+  });
+
+  for (const mode of ['data', 'header', 'writable', 'throwing-writable']) {
+    for (const size of ['large', 'small']) {
+      it(`keeps later requests working after ${mode} callback failure (${size} body)`, async () => {
+        const { execFile } = await import('node:child_process');
+        const { promisify } = await import('node:util');
+        const { stdout } = await promisify(execFile)(process.execPath, [
+          'test/fixtures/callback-abort.js', mode, size
+        ], { timeout: 10000 });
+        strictAssert.match(stdout, /callback-abort-ok/);
+      });
+    }
   }
 });
 

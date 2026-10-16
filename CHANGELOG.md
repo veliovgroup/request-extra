@@ -12,6 +12,8 @@ Promise declarations for Node ESM/CommonJS, method-aware retries, and fixes for 
 - ⚠️ `requestAsync()` defers only for explicit `wait: true`; it ignores the global wait default to preserve its declared return shape.
 - ⚠️ Streaming registration after transfer setup starts now throws. Register synchronously or use `wait: true` before sending.
 - ⚠️ Aborting a transfer destroys active writable destinations that provide `destroy()`, retaining error handlers through teardown.
+- ⚠️ After a transport error, a piped file is removed only when its stream has string `flags` `w`, `wx`, `xw`, `w+`, `wx+`, or `xw+`. Append, read-write, numeric flags, and custom writables without `flags` keep their file.
+- ⚠️ ESM and CommonJS entry points share one `request.defaultOptions` object per process.
 
 ## Other Changes
 
@@ -31,6 +33,10 @@ Promise declarations for Node ESM/CommonJS, method-aware retries, and fixes for 
 - 🔧 Serialization failures settle requests; reusable error objects no longer leak caller mutations.
 - 🔧 Caller headers replace defaults case-insensitively. `rawBody` keeps parsed headers while returning a Buffer body.
 - 🔧 A failed writable destroys its peers; pending writable errors after cancellation are consumed through teardown.
+- 🔧 Calling `abort()` inside `onData()`, `onHeader()`, or a writable `write()` no longer breaks later requests or crashes the process, including on the final chunk. A writable that throws on the final chunk no longer crashes with `Curl handle is closed`. Requests started from these callbacks also work.
+- 🔧 A `wait: true` Promise request settled by an invalid URL or `abort()` no longer raises an unhandled rejection before `sendAsync()`.
+- 🔧 Chaining `.pipe()`, `.onData()`, or `.onHeader()` onto a request with an invalid URL no longer throws; the error arrives through the callback or Promise.
+- 🔧 `request-libcurl/package.json` is exported.
 
 ### Docs
 

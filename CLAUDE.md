@@ -33,7 +33,8 @@ Single test: `npx cross-env SKIP_EXTERNAL=true mocha ./test/npm.js ./test/local.
 - `retries` counts additional attempts. Never retry descriptor uploads, writable destinations, or streaming callbacks; their data cannot be replayed safely. Keep serialized bytes and content type stable across retries.
 - Allow synchronous streaming registration; reject registration after native setup starts. Promise mode defers only for explicit `wait: true`, regardless of global defaults.
 - Bound individual timer delays and split oversized overall deadlines. Abort must clear retry, attempt, and overall timers.
-- Copy reusable errors before exposing them. Native error 52 maps to 503; selected TLS errors map to 526; other native errors generally map to 408. See `docs/retries-and-errors.md`.
+- User callbacks may run inside native data/header callbacks, where libcurl rejects handle changes; ticks and microtasks still run there. Start `perform()` from `setImmediate()`. Close handles torn down mid-transfer with `closeCurlDeferred()`; it overrides the instance's node-libcurl `onEnd`/`onError` so a late queued settlement cannot touch the closed handle. Re-check this on `node-libcurl` updates.
+- Copy reusable errors before exposing them. Native error 52 maps to 503; 47 (too many redirects) maps to 429; selected TLS errors map to 526; other native errors map to 408. See `docs/retries-and-errors.md`.
 - TLS verification defaults remain `false` for compatibility. Do not change without a major-version decision.
 
 ## Contribution and release
@@ -41,4 +42,4 @@ Single test: `npx cross-env SKIP_EXTERNAL=true mocha ./test/npm.js ./test/local.
 - Commit headers: one emoji followed by `type: scope / title`.
 - Require the native CI matrix for `node-libcurl` updates; details in `docs/ci-plan.md`. Root npm overrides do not protect consumer dependency trees.
 - Releases are manual: update version/changelog, tag, publish from a local checkout. `prepack` builds the CommonJS output.
-- `docs/superpowers/` contains ignored working notes; never reference it from tracked files.
+- `docs/superpowers/` and `.superpowers/` contain ignored working notes; never reference them from tracked files except ignore configs.
