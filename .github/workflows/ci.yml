@@ -67,7 +67,6 @@ jobs:
       - run: npm run test:local
 
   bun-probe:
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,4 +74,10 @@ jobs:
         with:
           bun-version: latest
       - run: npm ci
-      - run: npm run test:bun
+      - name: Probe Bun compatibility
+        id: bun
+        continue-on-error: true
+        run: npm run test:bun
+      - name: Report unsupported Bun runtime
+        if: steps.bun.outcome == 'failure'
+        run: echo "::warning::Bun compatibility probe failed. Bun remains unsupported."
