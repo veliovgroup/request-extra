@@ -1,6 +1,15 @@
 # Examples
 
-Examples use `requestAsync()` and throw failures to caller unless noted.
+Examples use `requestAsync()`. Transport and configuration failures reject; HTTP error statuses remain responses for the caller to inspect.
+
+Enable TLS verification once at application startup before running HTTPS examples:
+
+```js
+import request from 'request-libcurl';
+
+request.defaultOptions.rejectUnauthorized = true;
+request.defaultOptions.rejectUnauthorizedProxy = true;
+```
 
 ## JSON request body
 
@@ -98,6 +107,7 @@ try {
   const request = await requestAsync({
     url: 'https://example.com/report.json',
     wait: true,
+    noStorage: true,
     retry: false
   });
   request.pipe(first).pipe(second);
@@ -108,6 +118,8 @@ try {
   throw error;
 }
 ```
+
+`noStorage: true` avoids retaining a second copy of the download in memory. It also disables stored response headers; register `onHeader()` before sending if raw headers are needed.
 
 ## File-descriptor upload
 
@@ -141,7 +153,6 @@ try {
     url: 'https://example.com/upload',
     method: 'POST',
     retry: false,
-    curlFeatures: { NoDataParsing: true, NoHeaderParsing: true },
     curlOptions: {
       HTTPPOST: [
         { name: 'file', file: '/tmp/report.pdf', type: 'application/pdf' },

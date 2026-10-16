@@ -13,7 +13,7 @@ Small callback and Promise wrapper around `node-libcurl` for server-side transfe
 npm install request-libcurl
 ```
 
-Requires Node.js 22.15 or newer. Bun runtime is not supported because `node-libcurl` currently requires unsupported libuv APIs.
+Requires Node.js 22.15 or newer. Use Node.js 22 or 24 in production: Node.js 26 has [known native stalls and upload failures](https://github.com/veliovgroup/request-extra/blob/master/docs/platform-notes.md#nodejs-26). Bun runtime is not supported because `node-libcurl` requires unsupported libuv APIs.
 
 ## Quick start
 
@@ -22,6 +22,8 @@ import { requestAsync } from 'request-libcurl';
 
 const { statusCode, headers, body } = await requestAsync({
   url: 'https://example.com/data.json',
+  rejectUnauthorized: true,
+  rejectUnauthorizedProxy: true,
   retry: false
 });
 ```
@@ -29,7 +31,12 @@ const { statusCode, headers, body } = await requestAsync({
 ```js
 import request from 'request-libcurl';
 
-request({ url: 'https://example.com', retry: false }, (error, response) => {
+request({
+  url: 'https://example.com',
+  rejectUnauthorized: true,
+  rejectUnauthorizedProxy: true,
+  retry: false
+}, (error, response) => {
   if (error) throw error;
   console.log(response.statusCode);
 });

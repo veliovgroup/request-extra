@@ -48,6 +48,19 @@ When response has `Retry-After`, library accepts non-negative seconds or future 
 
 The overall fallback budget includes attempts and retry delays. Budgets longer than one Node timer are scheduled in bounded chunks, not truncated to a millisecond. Disabling retries or selecting a method outside `retryMethods` uses a single-attempt budget.
 
+## HTTP error statuses
+
+HTTP responses do not reject merely because their status is `4xx` or `5xx`. Retryable statuses can trigger another attempt; after retries are exhausted, the last response resolves normally. Inspect `statusCode` to apply application policy:
+
+```js
+const response = await requestAsync({ url, retry: false });
+if (response.statusCode >= 400) {
+  throw new Error(`HTTP ${response.statusCode}`);
+}
+```
+
+Transport, configuration, serialization, writable, and cancellation failures reject or call back with an error.
+
 ## Error shape
 
 Callback failures receive `ResponseError`; Promise requests reject with same shape. `errorCode` is libcurl error code and `code` aliases it. `statusCode` is mapped HTTP-style status and `status` aliases it.
