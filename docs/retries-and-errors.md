@@ -69,6 +69,10 @@ Callback failures receive `ResponseError`; Promise requests reject with same sha
 - Invalid request body or curl configuration: status 400 or 500.
 - Abort: status 499, error code 42.
 - Writable-stream failure: status 500, error code 23.
-- TLS failures map to status 526.
+- Empty server reply (libcurl code 52): status 503.
+- Too many redirects (libcurl code 47): status 429. It does not retry.
+- TLS failures (libcurl codes 35, 58, 60, 83, 90, 91): status 526.
+- Other libcurl errors: status 408.
+- An exception thrown by an `onData()` or `onHeader()` callback ends the transfer with libcurl code 42 and status 408. The thrown error is in `cause`. A library abort also uses code 42, but with status 499.
 
 Check `errorCode` when handling libcurl-specific failures and `statusCode` when applying HTTP-style policy.
