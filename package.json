@@ -1,6 +1,6 @@
 {
   "name": "request-libcurl",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Extremely stable HTTP request module built on top of libcurl",
   "main": "./index.cjs",
   "types": "./index.d.ts",
